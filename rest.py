@@ -9,6 +9,7 @@ import block
 import blockchain as blockchainModule
 import wallet
 import transaction
+import tools
 
 ### JUST A BASIC EXAMPLE OF A REST API WITH FLASK
 
@@ -47,15 +48,15 @@ myAddress = ""
 #global variable wallet
 myWallet = 0
 
-#peers.add('http://10.0.0.1:5000/') #bootstrap node isws to dinoume san parametro stin ekinisi tou programmatos. alliws hardcoded
+#Dictionary for peers (Routing Table)
 peers = {}
 #peers.update({"http://10.0.0.1:5000/": ""})
 
-# UTXOs for each wallet
+# UTXOs for each wallet (Locally)
 wallets = {}
 
 #Ids counter
-idCounter = 1
+idCounter = 0
 id_ip = {}
 
 #Create new blockchain from dump data (json data)
@@ -396,14 +397,19 @@ if __name__ == '__main__':
     import socket
     
     parser = ArgumentParser()
+    # Get Port to listen to
     parser.add_argument('-p', '--port', default=5000, type=int, help='port to listen on')
     args = parser.parse_args()
     port = args.port
-    myAddress = "http://" + socket.gethostbyname(socket.gethostname()) + ":" + str(port) + "/"
+    #Get own address
+    myAddress = "http://" + tools.get_ip() + ":" + str(port) + "/"
+    #Initialize wallet
     myWallet = wallet.wallet(myAddress)
     peers.update({str(myWallet.publickey.decode('utf-8')): myAddress})
-    id_ip.update({"id1": "http://10.0.0.1:5000/"})
-    #create First Transaction, 500*N NBC to my self # Everyone this its self as bootstrap until registered
+    #This probably needs to be updated
+    id_ip.update({"id0": myAddress})
+    idCounter+=1
+    #create First Transaction, 500*N NBC to my self # Everyone assumes self as bootstrap until registered
     firstInput = {"previousOutputId": 0, "ammount": 500}
     initTransaction = transaction.Transaction("0", myWallet.publickey.decode('utf-8'), 500, firstInput)
     initTransaction.sign_transaction(myWallet.privatekey)

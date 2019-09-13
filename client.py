@@ -2,13 +2,14 @@ import datetime
 import json
 import requests
 from flask import render_template, redirect, request
+from tools import get_ip
 
 id_ip = {}
 
 def register():
 	url = myAddress + "register_with"
 	headers = {'Content-Type': "application/json"}
-	data = {"node_address":"10.0.0.1:5000"}
+	data = {"node_address":"10.0.2.4:5000"}
 	requests.post(url, data=json.dumps(data), headers=headers)
 
 def update_ids():
@@ -27,7 +28,7 @@ if __name__ == '__main__':
 	bts = args.bootstrap
 
 	global myAddress
-	myAddress = "http://" + socket.gethostbyname(socket.gethostname()) + ":5000/"
+	myAddress = "http://"  + get_ip() + ":5000/"
 	if not bts:
 		register() #register
 	while(1):
