@@ -6,7 +6,7 @@ from Crypto.Random import random
 class Blockchain:
     def __init__(self):
         self.chain = []
-        self.difficulty = 4
+        self.difficulty = 2
         self.capacity = 1
         self.unconfirmed_transactions = [] 
         self.mining = False

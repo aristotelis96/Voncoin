@@ -23,19 +23,19 @@ class Transaction:
 
         def __init__(self, sender_address, recipient_address, value, inputs):
                 ##set
-                #self.sender_address: To public key του wallet από το οποίο προέρχονται τα χρήματα
+                #self.sender_address: Wallet's public key FROM which the transfer is made
                 self.sender_address = sender_address
-                #self.receiver_address: To public key του wallet στο οποίο θα καταλήξουν τα χρήματα
+                #self.receiver_address: Wallet's public key TO which the transfer is made
                 self.receiver_address = recipient_address
-                #self.amount: το ποσό που θα μεταφερθεί
+                #self.amount: Amount to be transfered
                 self.ammount = value
-                #self.transaction_inputs: λίστα από Transaction Input 
+                #self.transaction_inputs: List of Transaction Input 
                 self.transaction_inputs = inputs
-                #self.transaction_id: το hash του transaction
+                #self.transaction_id: Transaction's hash
                 serialized = json.dumps(self.__dict__, sort_keys=True).encode('utf-8')
                 self.transaction_id_Obj = SHA.new(serialized)
                 self.transaction_id = self.transaction_id_Obj.hexdigest()
-                #self.transaction_outputs: λίστα από Transaction Output
+                #self.transaction_outputs: List of Transaction Output
                 self.transaction_outputs = []
                 #self Signature
                 #privKey = RSA.importKey(sender_private_key)
