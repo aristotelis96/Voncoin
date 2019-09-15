@@ -61,25 +61,28 @@ idCounter = 0
 id_ip = {}
 
 #Create new blockchain from dump data (json data)
+
+
 def create_chain_from_dump(chain_dump):
     global blockchain
     newblockchain = blockchainModule.Blockchain()
     for idx, block_data in enumerate(chain_dump):
         newblock = block.Block(block_data["index"],
-                      block_data["previous_hash"],
-                      block_data["transactions"])
-        newblock.timestamp=block_data["timestamp"]
+                               block_data["previous_hash"],
+                               block_data["transactions"])
+        newblock.timestamp = block_data["timestamp"]
         proof = block_data['hash']
         if idx > 0:
-            newblock.nonce=block_data["nonce"]
+            newblock.nonce = block_data["nonce"]
             added = newblockchain.add_block(newblock, proof)
             if not added:
                 raise Exception("The chain dump is tampered!!")
-        else:#else the block is a genesis block, no verification needed 
+        else:  # else the block is a genesis block, no verification needed
             newblock.hash = proof
             newblockchain.chain.append(newblock)
     newblockchain.unconfirmed_transactions = blockchain.unconfirmed_transactions
     return newblockchain
+
 
 def consensus():
     """
@@ -91,12 +94,13 @@ def consensus():
     longest_chain = None
     current_len = len(blockchain.chain)
 
-    for (_,node) in peers.items():
+    for (_, node) in peers.items():
         url = ('{}currentchain'.format(node))
         print("Consensus will hit : ", url)
         response = requests.get(url)
         length = response.json()['length']
-        chain = create_chain_from_dump(response.json()['chain']) #create chain and check if is valid and bigger
+        # create chain and check if is valid and bigger
+        chain = create_chain_from_dump(response.json()['chain'])
         #i doka sto mail leei dn einai poly kali praktiki na pigeno fernoume olo to chain
         if length > current_len and chain.check_chain_validity():
             current_len = length
@@ -109,11 +113,14 @@ def consensus():
     return False
 
 # Broadcast transaction Function
+
+
 class broadcast_transaction (threading.Thread):
     def __init__(self, tx, peer):
         threading.Thread.__init__(self)
         self.tx = tx
         self.peer = peer
+
     def run(self):
         url = self.peer + "new_transaction"
         headers = {'Content-Type': "application/json"}
@@ -137,7 +144,7 @@ def currentchain():
         chain_data = []
         for block in blockchain.chain:
                 chain_data.append(block.__dict__)
-        return json.dumps({"length": len(chain_data), "chain": chain_data, "_datapeers":(peers)})
+        return json.dumps({"length": len(chain_data), "chain": chain_data, "_datapeers": (peers)})
 
 #endpoint to create a new transaction
 @app.route('/create_new_transaction', methods=['POST'])
@@ -164,22 +171,25 @@ def create_new_transaction():
         #find key of recipient
         recipient_key = ""
         for (key, ip) in peers.items():
-                if ip==tx_data.get("receiver_ip"):
+                if ip == tx_data.get("receiver_ip"):
                         recipient_key = key
                         break
-        newTx = transaction.Transaction(myWallet.publickey.decode('utf-8'), recipient_key, tx_data.get("ammount"), inputs)
+        newTx = transaction.Transaction(myWallet.publickey.decode(
+            'utf-8'), recipient_key, tx_data.get("ammount"), inputs)
         newTx.sign_transaction(myWallet.privatekey)
         #broadcast TX
-        for peer in [p for (_,p) in peers.items() if p!=myWallet.myAddress]:
+        for peer in [p for (_, p) in peers.items() if p != myWallet.myAddress]:
             thread = broadcast_transaction(newTx, peer)
             thread.start()
         output = []
-        output.append({"id": 0, "transaction_id": newTx.transaction_id, "ammount": tx_data.get("ammount"), "recipient_address": recipient_key})
+        output.append({"id": 0, "transaction_id": newTx.transaction_id, "ammount": tx_data.get(
+            "ammount"), "recipient_address": recipient_key})
         wallets[tx_data.get("receiver_ip")].append(output[0])
         change = NBCtotal - tx_data.get("ammount")
-        if(change>0):
-                output.append({"id": 1, "transaction_id": newTx.transaction_id, "ammount": NBCtotal - tx_data.get("ammount"), "recipient_address": myWallet.publickey.decode('utf-8')})
-                wallets[tx_data.get("sender_ip")].append(output[1])     
+        if(change > 0):
+                output.append({"id": 1, "transaction_id": newTx.transaction_id, "ammount": NBCtotal -
+                               tx_data.get("ammount"), "recipient_address": myWallet.publickey.decode('utf-8')})
+                wallets[tx_data.get("sender_ip")].append(output[1])
         newTx.transaction_outputs = output
         while not blockchain.add_new_transaction(newTx.to_dict()):
                 mine_unconfirmed_transactions()
@@ -192,7 +202,8 @@ def create_new_transaction():
 def new_transaction():
         txLock.acquire()
         tx_data = request.get_json()
-        required_fields = ["sender_address", "receiver_address", "ammount", "transaction_id", "txInput", "signature"]
+        required_fields = ["sender_address", "receiver_address",
+                           "ammount", "transaction_id", "txInput", "signature"]
         for field in required_fields:
                 if not tx_data.get(field):
                         print(field)
@@ -209,13 +220,14 @@ def new_transaction():
         #get UTXOs for this ip
         UTXOs = wallets.get(ip)
         for txInput in inputs:
-                if not any(inp["transaction_id"] == txInput["transaction_id"] for inp in UTXOs):        
+                if not any(inp["transaction_id"] == txInput["transaction_id"] for inp in UTXOs):
                         print("Invalid inputs in /new_transaction")
                         return "Invalid transaction, invalid input", 403
         #remove these inputs and find total NBC ammount used
         NBCused = 0
         for txInput in inputs:
-                tbremoved = (next(inp for inp in UTXOs if inp["transaction_id"] == txInput["transaction_id"]))
+                tbremoved = (
+                    next(inp for inp in UTXOs if inp["transaction_id"] == txInput["transaction_id"]))
                 #check if sender is authorized for this transaction
                 if not tbremoved["recipient_address"] == tx_data["sender_address"]:
                         print("Transaction is using wrong inputs, discarding")
@@ -223,21 +235,25 @@ def new_transaction():
                 NBCused += tbremoved.get("ammount")
                 wallets.get(ip).remove(tbremoved)
         output = []
-        output.append({"id": 0, "transaction_id": tx_data.get("transaction_id"), "ammount": tx_data.get("ammount"), "recipient_address": tx_data.get("receiver_address")})
+        output.append({"id": 0, "transaction_id": tx_data.get("transaction_id"), "ammount": tx_data.get(
+            "ammount"), "recipient_address": tx_data.get("receiver_address")})
         recv_ip = peers.get(tx_data.get("receiver_address"))
         if not wallets.get(recv_ip):
                 wallets[recv_ip] = []
         wallets[recv_ip].append(output[0])
         change = NBCused - tx_data.get("ammount")
-        if(change>0):
-                output.append({"id": 1, "transaction_id": tx_data.get("transaction_id"), "ammount": NBCused - tx_data.get("ammount"), "recipient_address": tx_data.get("sender_address")})
+        if(change > 0):
+                output.append({"id": 1, "transaction_id": tx_data.get("transaction_id"), "ammount": NBCused -
+                               tx_data.get("ammount"), "recipient_address": tx_data.get("sender_address")})
                 wallets[ip].append(output[1])
         tx_data["txOutput"] = output
-        print("/new_transaction adding ammount: ", tx_data.get('ammount')," from ", ip, " to: ", recv_ip)
+        print("/new_transaction adding ammount: ",
+              tx_data.get('ammount'), " from ", ip, " to: ", recv_ip)
         while not blockchain.add_new_transaction(tx_data):
                 mine_unconfirmed_transactions()
         txLock.release()
         return "Success", 201
+
 
 @app.route('/chain', methods=['GET'])
 def get_chain():
@@ -250,19 +266,22 @@ def get_chain():
         #glock.release()
         return json.dumps({"length": len(chain_data), "chain": chain_data, "wallets": wallets})
 
+
 @app.route('/mine', methods=['GET'])
 def mine_unconfirmed_transactions():
-        glock.acquire() 
-        result = blockchain.mine() #melontika: Edw tha anoigei thread gia mine. An kapoios anakoinosei nwritera oti vrike block, stamatame to mining kai prosthetoume to block tou allou me xrisi tis /add_block
+        glock.acquire()
+        result = blockchain.mine()  # melontika: Edw tha anoigei thread gia mine. An kapoios anakoinosei nwritera oti vrike block, stamatame to mining kai prosthetoume to block tou allou me xrisi tis /add_block
         if not result:
                 glock.release()
                 return "No capacity reached"
-        announce_new_block(result) #i announce frontizei na ginei to add block gia olous tous peers (ektos gia ton eauto tou)
+        # i announce frontizei na ginei to add block gia olous tous peers (ektos gia ton eauto tou)
+        announce_new_block(result)
         proof = result.hash
         delattr(result, "hash")
         blockchain.add_block(result, proof)
         glock.release()
         return "Block #{} is mined.".format(result.index)
+
 
 @app.route('/pending_tx')
 def pending_tx():
@@ -279,24 +298,30 @@ def register_new_peers():
         global idCounter
         idCounter += 1
         id_ip.update({("id"+str(idCounter)): node_address})
-        for (_,peer) in peers.items():
+        for (_, peer) in peers.items():
                 url = "{}add_peers".format(peer)
                 headers = {'Content-Type': "application/json"}
-                requests.post(url, data=json.dumps({"peers":(peers), "id_ip":id_ip}), headers=headers)
+                requests.post(url, data=json.dumps(
+                    {"peers": (peers), "id_ip": id_ip}), headers=headers)
         # Create transaction for new node
-        inputs = [{"transaction_id": wallets.get(myWallet.myAddress)[0].get("transaction_id"), "id": wallets.get(myWallet.myAddress)[0].get("id")}]
-        newNodeTx = transaction.Transaction(myWallet.publickey.decode('utf-8'), key, 100, inputs)
+        inputs = [{"transaction_id": wallets.get(myWallet.myAddress)[0].get(
+            "transaction_id"), "id": wallets.get(myWallet.myAddress)[0].get("id")}]
+        newNodeTx = transaction.Transaction(
+            myWallet.publickey.decode('utf-8'), key, 100, inputs)
         newNodeTx.sign_transaction(myWallet.privatekey)
         # we need to broadcast transactiont to everyone and then add to our block (except myself and registering node *register node can't verify it for now*)
-        for peer in [p for (_,p) in peers.items() if p!=myWallet.myAddress and p!=node_address]:
+        for peer in [p for (_, p) in peers.items() if p != myWallet.myAddress and p != node_address]:
                 # maybe _thread in future
-                thread = broadcast_transaction(newNodeTx, peer) #function at 101
+                thread = broadcast_transaction(
+                    newNodeTx, peer)  # function at 101
                 thread.start()
         #we didnt broadcast to self, no need to validate, just create outputs
         #remove from utxo, while registering only 1 UTXO in list
         UTXO = wallets.pop(myWallet.myAddress)[0]
-        output0 = {"id": 0, "transaction_id": newNodeTx.transaction_id, "ammount": newNodeTx.ammount, "recipient_address": key}
-        output1 = {"id": 1, "transaction_id": newNodeTx.transaction_id, "ammount": UTXO.get("ammount") - newNodeTx.ammount, "recipient_address": myWallet.publickey.decode('utf-8')}
+        output0 = {"id": 0, "transaction_id": newNodeTx.transaction_id,
+                   "ammount": newNodeTx.ammount, "recipient_address": key}
+        output1 = {"id": 1, "transaction_id": newNodeTx.transaction_id, "ammount": UTXO.get(
+            "ammount") - newNodeTx.ammount, "recipient_address": myWallet.publickey.decode('utf-8')}
         output = [output0, output1]
         newNodeTx.transaction_outputs = output
         #add to blockchain
@@ -308,7 +333,7 @@ def register_new_peers():
         return get_chain()
 
 #endPoint to register this node with someone else (e.x. bootstrap)
-# Make post request with data = { node_address: #address_to_connect(bootstrap) } 
+# Make post request with data = { node_address: #address_to_connect(bootstrap) }
 @app.route('/register_with', methods=['POST'])
 def register_with_existing_node():
         #if you are registering (meaning you're not bootstrap) clear your wallets UTXOs
@@ -316,9 +341,11 @@ def register_with_existing_node():
         wallets = {}
         bootstrap_address = request.get_json()["bootstrap_address"]
         #get ip of current node
-        data = {"node_address": request.host_url, "public_key": str(myWallet.publickey.decode('utf-8'))}
+        data = {"node_address": request.host_url,
+                "public_key": str(myWallet.publickey.decode('utf-8'))}
         headers = {'Content-Type': "application/json"}
-        response = requests.post("http://" + bootstrap_address + "/register_node", data=json.dumps(data), headers=headers)
+        response = requests.post("http://" + bootstrap_address +
+                                 "/register_node", data=json.dumps(data), headers=headers)
         if response.status_code == 200:
                 global blockchain
                 global peers
@@ -341,14 +368,16 @@ def add_peers():
 #endPoint to get ids
 @app.route('/get_id_ip', methods=['GET'])
 def get_id_ip():
-        return jsonify({"id_ip":id_ip}), 200
+        return jsonify({"id_ip": id_ip}), 200
+
 
 @app.route('/add_block', methods=['POST'])
 def validate_and_add_block():
-#       glock.acquire()
+    #       glock.acquire()
         global blockchain
         block_data = request.get_json()
-        newblock = block.Block(block_data["index"], block_data["previous_hash"], block_data["transactions"])
+        newblock = block.Block(
+            block_data["index"], block_data["previous_hash"], block_data["transactions"])
         newblock.timestamp = block_data["timestamp"]
         newblock.nonce = block_data["nonce"]
         proof = block_data['hash']
@@ -364,23 +393,23 @@ def validate_and_add_block():
                 return "block was discarded", 400
         ## update wallets
         for tx in block_data["transactions"]:
-                for (ip,UTXOs) in wallets.items():
-                        if tx["transaction_id"] in UTXOs: UTXOs.remove(tx["transaction_id"])
+                for (ip, UTXOs) in wallets.items():
+                        if tx["transaction_id"] in UTXOs:
+                            UTXOs.remove(tx["transaction_id"])
 #       glock.release()
         return "Block added to chain", 201
+
 
 def announce_new_block(newblock):
         #for (_,peer) in peers.items():
         def threadFunc(peer, newblock):
                 url = "{}add_block".format(peer)
-                headers = {'Content-Type': "application/json" }
+                headers = {'Content-Type': "application/json"}
                 print("announce is hitting : ", url)
-                requests.post(url, data=json.dumps(newblock.__dict__, sort_keys=True), headers=headers) 
-        for peer in [p for (_,p) in peers.items() if p!=myWallet.myAddress]:
+                requests.post(url, data=json.dumps(
+                    newblock.__dict__, sort_keys=True), headers=headers)
+        for peer in [p for (_, p) in peers.items() if p != myWallet.myAddress]:
                 _thread.start_new_thread(threadFunc, (peer, newblock))
-
-
-
 
 
 # get last block transactions from the blockchain
@@ -392,16 +421,15 @@ def get_transactions():
     return jsonify(response), 200
 
 
-
 # run it once fore every node
-
 if __name__ == '__main__':
     from argparse import ArgumentParser
     import socket
-    
+
     parser = ArgumentParser()
     # Get Port to listen to
-    parser.add_argument('-p', '--port', default=5000, type=int, help='port to listen on')
+    parser.add_argument('-p', '--port', default=5000,
+                        type=int, help='port to listen on')
     args = parser.parse_args()
     port = args.port
     #Get own address
@@ -411,18 +439,18 @@ if __name__ == '__main__':
     peers.update({str(myWallet.publickey.decode('utf-8')): myAddress})
     #This probably needs to be updated
     id_ip.update({"id0": myAddress})
-    idCounter+=1
+    idCounter += 1
     #create First Transaction, 500*N NBC to my self # Everyone assumes self as bootstrap until registered
     firstInput = {"previousOutputId": 0, "ammount": 500}
-    initTransaction = transaction.Transaction("0", myWallet.publickey.decode('utf-8'), 500, firstInput)
+    initTransaction = transaction.Transaction(
+        "0", myWallet.publickey.decode('utf-8'), 500, firstInput)
     initTransaction.sign_transaction(myWallet.privatekey)
     #we dont validate this transaction, just create UTXOs
-    output = {"id": 0, "transaction_id": initTransaction.transaction_id, "recipient_address": myWallet.publickey.decode('utf-8'), "ammount": initTransaction.ammount}
+    output = {"id": 0, "transaction_id": initTransaction.transaction_id,
+              "recipient_address": myWallet.publickey.decode('utf-8'), "ammount": initTransaction.ammount}
     initTransaction.transaction_outputs.append(output)
     # save to wallets
     wallets.update({myAddress: [output]})
     #create genesis block, assign to self 500*n NBC
     blockchain.create_genesis_block(initTransaction)
     app.run(host='0.0.0.0', port=port)
-
-
