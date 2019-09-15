@@ -244,8 +244,7 @@ def get_chain():
         #glock.acquire()
         consensus()
         chain_data = []
-        peers_data = peers
-        
+
         for block in blockchain.chain:
                 chain_data.append(block.__dict__)
         #glock.release()
@@ -253,20 +252,15 @@ def get_chain():
 
 @app.route('/mine', methods=['GET'])
 def mine_unconfirmed_transactions():
-        glock.acquire()
+        glock.acquire() 
         result = blockchain.mine() #melontika: Edw tha anoigei thread gia mine. An kapoios anakoinosei nwritera oti vrike block, stamatame to mining kai prosthetoume to block tou allou me xrisi tis /add_block
         if not result:
                 glock.release()
                 return "No capacity reached"
         announce_new_block(result) #i announce frontizei na ginei to add block gia olous tous peers (ektos gia ton eauto tou)
-        ##
         proof = result.hash
-        #newBlk = block.Block(result.index, result.previous_hash, result.transactions)
-        #newBlk.timestamp = result.timestamp
-        #newBlk.nonce = result.nonce
         delattr(result, "hash")
         blockchain.add_block(result, proof)
-        ##
         glock.release()
         return "Block #{} is mined.".format(result.index)
 
@@ -293,10 +287,11 @@ def register_new_peers():
         inputs = [{"transaction_id": wallets.get(myWallet.myAddress)[0].get("transaction_id"), "id": wallets.get(myWallet.myAddress)[0].get("id")}]
         newNodeTx = transaction.Transaction(myWallet.publickey.decode('utf-8'), key, 100, inputs)
         newNodeTx.sign_transaction(myWallet.privatekey)
-        # we need to broadcast transactiont to everyone and then add to our block (except myself and registering node)
+        # we need to broadcast transactiont to everyone and then add to our block (except myself and registering node *register node can't verify it for now*)
         for peer in [p for (_,p) in peers.items() if p!=myWallet.myAddress and p!=node_address]:
                 # maybe _thread in future
-                broadcast_transaction(newNodeTx, peer) #function at 101
+                thread = broadcast_transaction(newNodeTx, peer) #function at 101
+                thread.start()
         #we didnt broadcast to self, no need to validate, just create outputs
         #remove from utxo, while registering only 1 UTXO in list
         UTXO = wallets.pop(myWallet.myAddress)[0]
@@ -306,9 +301,7 @@ def register_new_peers():
         newNodeTx.transaction_outputs = output
         #add to blockchain
         while not (blockchain.add_new_transaction(newNodeTx.to_dict())):
-                mine_unconfirmed_transactions() 
-        #blockchain.add_new_transaction(newNodeTx.to_dict())
-        #mine_unconfirmed_transactions()
+                mine_unconfirmed_transactions()
         # Update wallets with UTXOs
         wallets[node_address] = [output0]
         wallets[myWallet.myAddress] = [output1]
