@@ -16,23 +16,23 @@ from uuid import uuid4
 
 class wallet:
 
-	def __init__(self, myAddress):
-		key = RSA.generate(1024)
-		self.public_key = key.publickey()
-		self.private_key = key
-		self.address = myAddress
-		#self.transactions
+        def __init__(self, myAddress):
+                key = RSA.generate(1024)
+                self.public_key = key.publickey()
+                self.private_key = key
+                self.address = myAddress
+                #self.transactions
 
-	@property
-	def publickey(self):
-		return self.public_key.exportKey()
+        @property
+        def publickey(self):
+                return self.public_key.exportKey()
 
-	@property
-	def privatekey(self):
-		return self.private_key.exportKey()
-	
-	@property
-	def myAddress(self):
-		return self.address
-	#def balance():
+        @property
+        def privatekey(self):
+                return self.private_key.exportKey()
+        
+        @property
+        def myAddress(self):
+                return self.address
+        #def balance():
 
