@@ -15,10 +15,15 @@ class node:
         self.address = address
         self.wallet = wallet.wallet(address)
         # here we store information for every node, as its id, its address (ip:port) its public key and its balance
-        self.peers = ({address: str(self.wallet.publickey.decode('utf-8'))})
+        self.peers = ({str(self.wallet.publickey.decode('utf-8'): address )})
         self.id_ip = {"id0": address}
         self.wallets = {}
-        
+    
+    @property
+    def wallet_balance(self):
+        ammount = sum(UTXO.get("ammount") for UTXO in self.wallets[self.wallet.address])
+        return ammount
+
     #def create_new_block():
         #previousHash = blockchain.chain[-1].current_hash
         #self.myBlock = block.Block(previousHash, [])
@@ -27,31 +32,29 @@ class node:
         #create a wallet for this node, with a public key and a private key
 
     #Bootstrap Method to register a node
-    def register_node(self, request):
-        node_address = request.get_json()["node_address"]
-        key = request.get_json()["public_key"]
+    def register_node(self, node_address, node_key):    
         if not node_address:
                 return "invalid data", 400
-        self.peers.update({node_address: key})        
+        self.peers.update({node_key: node_address})        
         self.id_ip.update({("id"+str(self.current_id_count)): node_address})
         self.current_id_count += 1
         #Notify everyone about newly entered peer
-        for(peer,_) in self.peers.items():
+        for(_,peer) in self.peers.items():
             url = "{}add_peers".format(peer)
             headers = {'Content-Type': "application/json"}
             requests.post(url, data=json.dumps({"peers": (self.peers), "id_ip": self.id_ip}), headers=headers)
         # Create transaction for new node. 100 NBC from bootstrap
         inputs = [{"transaction_id": self.wallets.get(self.wallet.address)[0].get("transaction_id"), "id": self.wallets.get(self.wallet.address)[0].get("id")}]
-        newNodeTx = transaction.Transaction(self.wallet.publickey.decode('utf-8'), key, 100, inputs)
+        newNodeTx = transaction.Transaction(self.wallet.publickey.decode('utf-8'), node_key, 100, inputs)
         newNodeTx.sign_transaction(self.wallet.privatekey)
         # we need to broadcast transactiont to everyone and then add to our block (except myself and registering node *register node can't verify it for now*)
-        for peer in [p for (p,_) in self.peers.items() if p != self.wallet.address and p != node_address]:
+        for peer in [p for (_,p) in self.peers.items() if p != self.wallet.address and p != node_address]:
             self.send_transaction(newNodeTx, peer)
         #we didnt broadcast to self, no need to validate, just create outputs
         #remove from utxo, while registering only 1 UTXO in list
         UTXO = self.wallets.pop(self.wallet.address)[0]
         output0 = {"id": 0, "transaction_id": newNodeTx.transaction_id,
-                   "ammount": newNodeTx.ammount, "recipient_address": key}
+                   "ammount": newNodeTx.ammount, "recipient_address": node_key}
         output1 = {"id": 1, "transaction_id": newNodeTx.transaction_id, "ammount": UTXO.get(
             "ammount") - newNodeTx.ammount, "recipient_address": self.wallet.publickey.decode('utf-8')}
         output = [output0, output1]
@@ -77,9 +80,10 @@ class node:
                 return "Registration Successful", 200
         else:
                 return "Registration failed", 500
-        #add this node to the ring, only the bootstrap node can add a node to the ring after checking his wallet and ip:port address
-        #bottstrap node informs all other nodes and gives the request node an id and 100 NBCs
+    #add this node to the ring, only the bootstrap node can add a node to the ring after checking his wallet and ip:port address
+    #bottstrap node informs all other nodes and gives the request node an id and 100 NBCs
 
+    # Create initial transaction (100 NBC to a peer from bootstrap)
     def create_initial_transaction(self, bootstrap, ammount):
         firstInput = {"previousOutputId": 0, "ammount": ammount}
         initTransaction = transaction.Transaction("0", self.wallet.publickey.decode('utf-8'), ammount, firstInput)
@@ -90,6 +94,7 @@ class node:
         self.chain.create_genesis_block(initTransaction)
         return
 
+    # Send a transaction to a peer
     def send_transaction(self, transaction, peer):
         class send_transaction (threading.Thread):
             def __init__(self, tx, peer):
@@ -106,18 +111,16 @@ class node:
         thread.start()
         return
 
-
-
-
     #def validdate_transaction():
         #use of signature and NBCs balance
 
-
+    # Add a transaction to current block
     def add_transaction_to_block(self, newTx):
         #if enough transactions  mine
         while not (self.chain.add_new_transaction(newTx.to_dict())):
             self.mine_unconfirmed_transactions()
-
+    
+    #mine a block
     def mine_unconfirmed_transactions(self):
         result = self.chain.mine()
         if not result:
@@ -128,6 +131,23 @@ class node:
         self.chain.add_block(result, proof)
         return result.index
 
+    # Add a block
+    def add_block(self, index, previous_hash, transactions, timestamp, nonce, proof):
+        #create new block
+        newBlk = block.Block(index, previous_hash, transactions)
+        newBlk.timestamp = timestamp
+        newBlk.nonce = nonce
+        added = self.chain.add_block(newBlk, proof)
+        if not added:
+            print("Block discarded")
+            self.valid_chain()
+            self.setWallets()
+            return
+        # If added correctly fix wallets
+        for tx in transactions:
+                for (_, UTXOs) in self.wallets.items():
+                        if tx["transaction_id"] in UTXOs:
+                            UTXOs.remove(tx["transaction_id"])
 
     def broadcast_block(self, block):
         #TODO
@@ -138,16 +158,13 @@ class node:
 
     #def valid_proof(.., difficulty=MINING_DIFFICULTY):
 
-
-
-
     #concencus functions
 
     def valid_chain(self):
         #check for the longer chain accroose all nodes
         longest_chain = None
         current_len = len(self.chain.chain)
-        for (node, _) in self.peers.items():
+        for (_, node) in self.peers.items():
             url = ('{}currentchain'.format(node))
             response = requests.get(url)
             length = response.json()['length']
@@ -161,24 +178,3 @@ class node:
             self.chain = longest_chain
             return True
         return False
-
-
-    # def resolve_conflicts(self):
-    # 	global blockchain
-    # 	longest_chain = None
-    # 	current_len = len (blockchain.chain)
-        
-    # 	for node in peers:
-    # 		response = requests.get('http://{}/chain'.format(node))
-    # 		length = response.json()['length']
-    # 		chain = response.json()['chain']
-    # 		if length > current_len and blockchain.check_chain_validity(chain):
-    # 			current_len = length
-    # 			longest_chain = chain
-    # 	if longest_chain:
-    # 		blockchain = longest_chain
-    # 		return True
-    # 	return False
-
-
-

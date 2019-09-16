@@ -86,35 +86,6 @@ def create_chain_from_dump(chain_dump):
     newblockchain.unconfirmed_transactions = blockchain.unconfirmed_transactions
     return newblockchain
 
-
-# def consensus():
-#     """
-#     Our simple consnsus algorithm. If a longer valid chain is
-#     found, our chain is replaced with it.
-#     """
-#     global blockchain
-
-#     longest_chain = None
-#     current_len = len(blockchain.chain)
-
-#     for (_, node) in peers.items():
-#         url = ('{}currentchain'.format(node))
-#         print("Consensus will hit : ", url)
-#         response = requests.get(url)
-#         length = response.json()['length']
-#         # create chain and check if is valid and bigger
-#         chain = create_chain_from_dump(response.json()['chain'])
-#         #i doka sto mail leei dn einai poly kali praktiki na pigeno fernoume olo to chain
-#         if length > current_len and chain.check_chain_validity():
-#             current_len = length
-#             longest_chain = chain
-
-#     if longest_chain:
-#         blockchain = longest_chain
-#         return True
-
-#     return False
-
 # Broadcast transaction Function
 
 
@@ -135,10 +106,8 @@ class broadcast_transaction (threading.Thread):
 #endpoint to return wallet balance
 @app.route('/wallet_balance', methods=['GET'])
 def wallet_balance():
-        UTXOs = wallets[myWallet.myAddress]
-        ammount = 0
-        for UTXO in UTXOs:
-                ammount += UTXO.get("ammount")
+        global node
+        ammount = node.wallet_balance
         return json.dumps({"wallet_balance": ammount}), 200
 
 #endpoint to return current chain without consensus
@@ -261,17 +230,9 @@ def new_transaction():
 def get_chain():
         #glock.acquire()
         global node                
-        node.valid_chain()        
-        chain_data = []     
-        for block in node.chain.chain:
-                chain_data.append(block.__dict__)
-        # consensus()
-        # chain_data = []
-
-        # for block in blockchain.chain:
-        #         chain_data.append(block.__dict__)
+        node.valid_chain()                
+        chain_data = [blk.__dict__ for blk in node.chain.chain]
         #glock.release()
-        
         return json.dumps({"length": len(chain_data), "chain": chain_data, "wallets": node.wallets})
 
 
@@ -303,8 +264,10 @@ def pending_tx():
 #this is called only from bootstrap. registers new node and broadcasts to everyone
 @app.route('/register_node', methods=['POST'])
 def register_new_peers():
+        node_address = request.get_json()["node_address"]
+        key = request.get_json()["public_key"]
         global node
-        node.register_node(request)
+        node.register_node(node_address, key)
         # node_address = request.get_json()["node_address"]
         # key = request.get_json()["public_key"]
         # if not node_address:
@@ -374,7 +337,17 @@ def get_id_ip():
 
 @app.route('/add_block', methods=['POST'])
 def validate_and_add_block():
-    #       glock.acquire()
+    # glock.acquire()
+    global node
+    block_data = request.get_json()
+    index = block_data["index"]
+    previous_hash = block_data["previous_hash"]
+    transactions = block_data["transactions"]
+    timestamp = block_data["timestamp"]
+    nonce = block_data["nonce"]
+    proof = block_data['hash']
+    node.add_block(index, previous_hash, transactions, timestamp, nonce, proof)
+
         global blockchain
         block_data = request.get_json()
         newblock = block.Block(

@@ -3,6 +3,7 @@ import json
 import transaction
 import _thread
 from Crypto.Random import random
+
 class Blockchain:
     def __init__(self):
         self.chain = []
