@@ -26,7 +26,7 @@ class Blockchain:
             computed_hash = block.compute_hash()
             if not self.mining:
                 return False
-                print("I successfully mined a block")
+        print("I successfully mined a block")
         return computed_hash
 
     @property
