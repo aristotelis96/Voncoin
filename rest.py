@@ -334,7 +334,7 @@ def add_peers():
 def get_id_ip():
         return jsonify({"id_ip": id_ip}), 200
 
-
+#Route to add a block someone else mined
 @app.route('/add_block', methods=['POST'])
 def validate_and_add_block():
     # glock.acquire()
@@ -347,31 +347,39 @@ def validate_and_add_block():
     nonce = block_data["nonce"]
     proof = block_data['hash']
     node.add_block(index, previous_hash, transactions, timestamp, nonce, proof)
+    return "block added to chain", 200
 
-        global blockchain
-        block_data = request.get_json()
-        newblock = block.Block(
-            block_data["index"], block_data["previous_hash"], block_data["transactions"])
-        newblock.timestamp = block_data["timestamp"]
-        newblock.nonce = block_data["nonce"]
-        proof = block_data['hash']
-        added = blockchain.add_block(newblock, proof)
-        if not added:
-                print("block discarded")
-                global wallets
-                data = get_chain()
-                chain_dump = json.loads(data)["chain"]
-                blockchain = create_chain_from_dump(chain_dump)
-                wallets = json.loads(data)["wallets"]
-#               glock.release()
-                return "block was discarded", 400
-        ## update wallets
-        for tx in block_data["transactions"]:
-                for (_, UTXOs) in wallets.items():
-                        if tx["transaction_id"] in UTXOs:
-                            UTXOs.remove(tx["transaction_id"])
-#       glock.release()
-        return "Block added to chain", 201
+#         global blockchain
+#         block_data = request.get_json()
+#         newblock = block.Block(
+#             block_data["index"], block_data["previous_hash"], block_data["transactions"])
+#         newblock.timestamp = block_data["timestamp"]
+#         newblock.nonce = block_data["nonce"]
+#         proof = block_data['hash']
+#         added = blockchain.add_block(newblock, proof)
+#         if not added:
+#                 print("block discarded")
+#                 global wallets
+#                 data = get_chain()
+#                 chain_dump = json.loads(data)["chain"]
+#                 blockchain = create_chain_from_dump(chain_dump)
+#                 wallets = json.loads(data)["wallets"]
+# #               glock.release()
+#                 return "block was discarded", 400
+#         ## update wallets
+#         for tx in block_data["transactions"]:
+#                 for (_, UTXOs) in wallets.items():
+#                         if tx["transaction_id"] in UTXOs:
+#                             UTXOs.remove(tx["transaction_id"])
+# #       glock.release()
+#      return "Block added to chain", 201
+
+# Route to mine a block that someone else needs
+@app.route('/mine_a_block', methods=['POST'])
+def mine_a_block():
+        transactions = request.get_json()
+        # Validate that transactions are good and mine a block
+        node.validate_and_mine(transactions)
 
 
 def announce_new_block(newblock):
