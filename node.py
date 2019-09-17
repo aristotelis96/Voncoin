@@ -14,15 +14,16 @@ class miner (threading.Thread):
         self.transactions = transactions
         self.chain = chain
         self.peers = peers
+        self.lock = lock
 
     def run(self):
         # Make sure only one thread is mining at a time
-        lock.acquire()
+        self.lock.acquire()
         # Mine block
         if not self.mine_transactions():
             return # If mine fails do not broadcast
         self.broadcast_last_block()
-        lock.release()
+        self.lock.release()
         return
 
     def broadcast_last_block(self):
@@ -69,13 +70,6 @@ class node:
     def wallet_balance(self):
         ammount = sum(UTXO.get("ammount") for UTXO in self.wallets[self.wallet.address])
         return ammount
-
-    #def create_new_block():
-        #previousHash = blockchain.chain[-1].current_hash
-        #self.myBlock = block.Block(previousHash, [])
-
-    #def create_wallet():
-        #create a wallet for this node, with a public key and a private key
 
     #Bootstrap Method to register a node
     def register_node(self, node_address, node_key):    
@@ -135,7 +129,7 @@ class node:
         initTransaction = transaction.Transaction("0", self.wallet.publickey.decode('utf-8'), ammount, firstInput)
         initTransaction.sign_transaction(self.wallet.privatekey)
         output = {"id": 0, "transaction_id": initTransaction.transaction_id, "recipient_address": self.wallet.publickey.decode('utf-8'), "ammount": initTransaction.ammount}
-        initTransaction.transaction_outputs.append(output)
+        initTransaction.transaction_outputs.append(output)        
         self.wallets.update({self.address: [output]})
         self.chain.create_genesis_block(initTransaction)
         return
@@ -143,14 +137,49 @@ class node:
     def create_transaction(self, sender, receiver, ammount):
         if (sender != self.wallet.address):
             return "Wrong sender IP"
-        UXOs = self.wallets.get("sender")
+        UTXOs = self.wallets.get(sender)
         total = 0
         inputs = []
+        newUTXOs = UTXOs
         # Use UTXOs from node's wallet
-        
+        for txInput in UTXOs:
+            if total > ammount:
+                break
+            total += txInput["ammount"]
+            inputs.append(txInput)
+            newUTXOs.remove(txInput)
         #Find key from ip
-        key = [key for (key, ip) in self.peers.items() if ip == receiver][0]
-
+        recipient_key = [key for (key, ip) in self.peers.items() if ip == receiver][0]
+        newTx = transaction.Transaction(self.wallet.publickey.decode('utf-8'), recipient_key, ammount, inputs)
+        newTx.sign_transaction(self.wallet.privatekey)
+        #Broadcast TX
+        for peer in [p for (_,p) in self.peers.items() if p!=self.wallet.address]:
+            self.send_transaction(newTx, peer)
+        output = []
+        output.append({"id": 0, "transaction_id": newTx.transaction_id, "ammount": ammount, "recipient_address": recipient_key})
+        self.wallets[receiver].append(output[0])
+        change = total - ammount
+        if change > 0:
+            output.append({"id": 1, "transaction_id": newTx.transaction_id, "ammount": total - ammount, "recipient_address": self.wallet.publickey.decode('utf-8')})
+            self.wallets[sender].append(output[1])
+        newTx.transaction_outputs = output
+        self.add_transaction_to_block(newTx)
+        return
+    
+    def receive_transaction(self, tx):
+        if not transaction.verify_signature(tx):
+            print("failed to verify signature in /new_transaction")
+            return "Error"
+        #Validate inputs are indeed UTXOs
+        ip = self.peers.get(tx["sender_address"])
+        UXTOs = self.wallets[ip]        
+        for txInput in tx["txInput"]:
+            if not any(inp["transaction_id"] == txInput["transaction_id"] for inp in UXTOs):
+                print("Invalid inputs")
+                return False
+        # Remove inputs from wallet and find total coins used
+        #TODO
+        return True
     # Send a transaction to a peer
     def send_transaction(self, transaction, peer):
         class send_transaction (threading.Thread):
@@ -181,7 +210,7 @@ class node:
     #Function to mine validated transactions
     def mine(self, transactions):
         #broadcast to everyone the block to be mined        
-        for (_, peer) in peers:
+        for (_, peer) in self.peers:
             url = peer + "mine_a_block"
             headers = {'Content-Type': "application/json"}
             data = json.dumps(transactions.__dict__)
@@ -193,9 +222,11 @@ class node:
     #Function to mine not validated transactions (TXs from other peers)
     def validate_and_mine(self, transactions):
         for tx in transactions:
-            transaction.verify_signature(tx)
+            if not (transaction.verify_signature(tx)):
+                return False
         # No need to broadcast now just mine the block
         self.miner(self.chain, transactions, self.peers, self.lock).start()
+        return True
 
    # Add a block
     def add_block(self, index, previous_hash, transactions, timestamp, nonce, proof):
@@ -203,17 +234,19 @@ class node:
         newBlk = block.Block(index, previous_hash, transactions)
         newBlk.timestamp = timestamp
         newBlk.nonce = nonce
+
         added = self.chain.add_block(newBlk, proof)
         if not added:
             print("Block discarded")
             self.valid_chain()
-            self.setWallets()
+            #self.setWallets()
             return
         # If added correctly fix wallets
         for tx in transactions:
-                for (_, UTXOs) in self.wallets.items():
-                        if tx["transaction_id"] in UTXOs:
-                            UTXOs.remove(tx["transaction_id"])
+            for (_, UTXOs) in self.wallets.items():
+                if tx["transaction_id"] in UTXOs:
+                    UTXOs.remove(tx["transaction_id"])
+        return
 
         
 

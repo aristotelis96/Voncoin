@@ -49,6 +49,8 @@ class Blockchain:
         return True
 
     def add_block(self, block, proof):
+        # STOP mining first        
+        self.mining = False
         previous_hash = self.last_block.hash
         if previous_hash != block.previous_hash:
             return False
@@ -59,7 +61,6 @@ class Blockchain:
             return False
         block.hash = proof
         self.lock.acquire()
-        self.mining = False
         self.chain.append(block)
         # Remove new Block transactions from unconfirmed transactions list
         for tx in block.transactions:

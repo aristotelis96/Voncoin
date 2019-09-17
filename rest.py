@@ -124,46 +124,48 @@ def create_new_transaction():
         txLock.acquire()
         tx_data = request.get_json()
         required_fields = ["sender_ip", "receiver_ip", "ammount"]
-        for field in required_fields:
+        for field in required_fields:              
                 if not tx_data.get(field):
                         return "Invalid transaction data", 403
-        if(tx_data["sender_ip"] != myWallet.myAddress):
-                return "Wrong sender IP", 405
-        #get inputs from UTXO pool until ammount is reached
-        NBCtotal = 0
-        UTXOs = wallets.get(tx_data.get("sender_ip"))
-        NewUTXOs = UTXOs
-        inputs = []
-        while NBCtotal < tx_data.get("ammount"):
-                for txInput in UTXOs:
-                        NBCtotal += txInput.get("ammount")
-                        inputs.append(txInput)
-                        NewUTXOs.remove(txInput)
-        #find key of recipient
-        recipient_key = ""
-        for (key, ip) in peers.items():
-                if ip == tx_data.get("receiver_ip"):
-                        recipient_key = key
-                        break
-        newTx = transaction.Transaction(myWallet.publickey.decode(
-            'utf-8'), recipient_key, tx_data.get("ammount"), inputs)
-        newTx.sign_transaction(myWallet.privatekey)
-        #broadcast TX
-        for peer in [p for (_, p) in peers.items() if p != myWallet.myAddress]:
-            thread = broadcast_transaction(newTx, peer)
-            thread.start()
-        output = []
-        output.append({"id": 0, "transaction_id": newTx.transaction_id, "ammount": tx_data.get(
-            "ammount"), "recipient_address": recipient_key})
-        wallets[tx_data.get("receiver_ip")].append(output[0])
-        change = NBCtotal - tx_data.get("ammount")
-        if(change > 0):
-                output.append({"id": 1, "transaction_id": newTx.transaction_id, "ammount": NBCtotal -
-                               tx_data.get("ammount"), "recipient_address": myWallet.publickey.decode('utf-8')})
-                wallets[tx_data.get("sender_ip")].append(output[1])
-        newTx.transaction_outputs = output
-        while not blockchain.add_new_transaction(newTx.to_dict()):
-                mine_unconfirmed_transactions()
+        global node
+        node.create_transaction(tx_data["sender_ip"], tx_data["receiver_ip"], tx_data["ammount"])
+        # if(tx_data["sender_ip"] != myWallet.myAddress):
+        #         return "Wrong sender IP", 405
+        # #get inputs from UTXO pool until ammount is reached
+        # NBCtotal = 0
+        # UTXOs = wallets.get(tx_data.get("sender_ip"))
+        # NewUTXOs = UTXOs
+        # inputs = []
+        # while NBCtotal < tx_data.get("ammount"):
+        #         for txInput in UTXOs:
+        #                 NBCtotal += txInput.get("ammount")
+        #                 inputs.append(txInput)
+        #                 NewUTXOs.remove(txInput)
+        # #find key of recipient
+        # recipient_key = ""
+        # for (key, ip) in peers.items():
+        #         if ip == tx_data.get("receiver_ip"):
+        #                 recipient_key = key
+        #                 break
+        # newTx = transaction.Transaction(myWallet.publickey.decode(
+        #     'utf-8'), recipient_key, tx_data.get("ammount"), inputs)
+        # newTx.sign_transaction(myWallet.privatekey)
+        # #broadcast TX
+        # for peer in [p for (_, p) in peers.items() if p != myWallet.myAddress]:
+        #     thread = broadcast_transaction(newTx, peer)
+        #     thread.start()
+        # output = []
+        # output.append({"id": 0, "transaction_id": newTx.transaction_id, "ammount": tx_data.get(
+        #     "ammount"), "recipient_address": recipient_key})
+        # wallets[tx_data.get("receiver_ip")].append(output[0])
+        # change = NBCtotal - tx_data.get("ammount")
+        # if(change > 0):
+        #         output.append({"id": 1, "transaction_id": newTx.transaction_id, "ammount": NBCtotal -
+        #                        tx_data.get("ammount"), "recipient_address": myWallet.publickey.decode('utf-8')})
+        #         wallets[tx_data.get("sender_ip")].append(output[1])
+        # newTx.transaction_outputs = output
+        # while not blockchain.add_new_transaction(newTx.to_dict()):
+        #         mine_unconfirmed_transactions()
     finally:
         txLock.release()
     return "Success", 201
@@ -171,7 +173,7 @@ def create_new_transaction():
 #endpoint to add a transaction someone else created
 @app.route('/new_transaction', methods=['POST'])
 def new_transaction():
-        txLock.acquire()
+        global txLock, node
         tx_data = request.get_json()
         required_fields = ["sender_address", "receiver_address",
                            "ammount", "transaction_id", "txInput", "signature"]
@@ -179,49 +181,60 @@ def new_transaction():
                 if not tx_data.get(field):
                         print(field)
                         return "Invalid transaction data", 403
-        #verify signature
-        if not transaction.verify_signature(tx_data):
-                print("failed to verify signature in /new_transaction")
-                txLock.release()
-                return "Invalid signature", 403
-        # validate Inputs are UTXOs
-        inputs = tx_data.get("txInput")
-        # get ip for sender_address
-        ip = peers.get(tx_data.get("sender_address"))
-        #get UTXOs for this ip
-        UTXOs = wallets.get(ip)
-        for txInput in inputs:
-                if not any(inp["transaction_id"] == txInput["transaction_id"] for inp in UTXOs):
-                        print("Invalid inputs in /new_transaction")
-                        return "Invalid transaction, invalid input", 403
-        #remove these inputs and find total NBC ammount used
-        NBCused = 0
-        for txInput in inputs:
-                tbremoved = (
-                    next(inp for inp in UTXOs if inp["transaction_id"] == txInput["transaction_id"]))
-                #check if sender is authorized for this transaction
-                if not tbremoved["recipient_address"] == tx_data["sender_address"]:
-                        print("Transaction is using wrong inputs, discarding")
-                        return "Invalid Transaction, wrong inputs", 405
-                NBCused += tbremoved.get("ammount")
-                wallets.get(ip).remove(tbremoved)
-        output = []
-        output.append({"id": 0, "transaction_id": tx_data.get("transaction_id"), "ammount": tx_data.get(
-            "ammount"), "recipient_address": tx_data.get("receiver_address")})
-        recv_ip = peers.get(tx_data.get("receiver_address"))
-        if not wallets.get(recv_ip):
-                wallets[recv_ip] = []
-        wallets[recv_ip].append(output[0])
-        change = NBCused - tx_data.get("ammount")
-        if(change > 0):
-                output.append({"id": 1, "transaction_id": tx_data.get("transaction_id"), "ammount": NBCused -
-                               tx_data.get("ammount"), "recipient_address": tx_data.get("sender_address")})
-                wallets[ip].append(output[1])
-        tx_data["txOutput"] = output
-        print("/new_transaction adding ammount: ",
-              tx_data.get('ammount'), " from ", ip, " to: ", recv_ip)
-        while not blockchain.add_new_transaction(tx_data):
-                mine_unconfirmed_transactions()
+
+        if not node.receive_transaction(tx_data):
+                return "Invalid transaction", 400
+        return "Success", 200
+        # tx_data = request.get_json()
+        # required_fields = ["sender_address", "receiver_address",
+        #                    "ammount", "transaction_id", "txInput", "signature"]
+        # for field in required_fields:
+        #         if not tx_data.get(field):
+        #                 print(field)
+        #                 return "Invalid transaction data", 403
+        # #verify signature
+        # if not transaction.verify_signature(tx_data):
+        #         print("failed to verify signature in /new_transaction")
+        #         txLock.release()
+        #         return "Invalid signature", 403
+        # # validate Inputs are UTXOs
+        # inputs = tx_data.get("txInput")
+        # # get ip for sender_address
+        # ip = peers.get(tx_data.get("sender_address"))
+        # #get UTXOs for this ip
+        # UTXOs = wallets.get(ip)
+        # for txInput in inputs:
+        #         if not any(inp["transaction_id"] == txInput["transaction_id"] for inp in UTXOs):
+        #                 print("Invalid inputs in /new_transaction")
+        #                 return "Invalid transaction, invalid input", 403
+        # #remove these inputs and find total NBC ammount used
+        # NBCused = 0
+        # for txInput in inputs:
+        #         tbremoved = (
+        #             next(inp for inp in UTXOs if inp["transaction_id"] == txInput["transaction_id"]))
+        #         #check if sender is authorized for this transaction
+        #         if not tbremoved["recipient_address"] == tx_data["sender_address"]:
+        #                 print("Transaction is using wrong inputs, discarding")
+        #                 return "Invalid Transaction, wrong inputs", 405
+        #         NBCused += tbremoved.get("ammount")
+        #         wallets.get(ip).remove(tbremoved)
+        # output = []
+        # output.append({"id": 0, "transaction_id": tx_data.get("transaction_id"), "ammount": tx_data.get(
+        #     "ammount"), "recipient_address": tx_data.get("receiver_address")})
+        # recv_ip = peers.get(tx_data.get("receiver_address"))
+        # if not wallets.get(recv_ip):
+        #         wallets[recv_ip] = []
+        # wallets[recv_ip].append(output[0])
+        # change = NBCused - tx_data.get("ammount")
+        # if(change > 0):
+        #         output.append({"id": 1, "transaction_id": tx_data.get("transaction_id"), "ammount": NBCused -
+        #                        tx_data.get("ammount"), "recipient_address": tx_data.get("sender_address")})
+        #         wallets[ip].append(output[1])
+        # tx_data["txOutput"] = output
+        # print("/new_transaction adding ammount: ",
+        #       tx_data.get('ammount'), " from ", ip, " to: ", recv_ip)
+        # while not blockchain.add_new_transaction(tx_data):
+        #         mine_unconfirmed_transactions()
         txLock.release()
         return "Success", 201
 
@@ -239,6 +252,7 @@ def get_chain():
 @app.route('/mine', methods=['GET'])
 def mine_unconfirmed_transactions():
         glock.acquire()
+        global node
         resultIndex = node.mine_unconfirmed_transactions()
         if resultIndex == -1:
                 glock.release()
@@ -323,8 +337,9 @@ def register_with_existing_node():
 def add_peers():
         try:
                 glock.acquire()
-                peers.update(request.get_json()["peers"])
-                id_ip.update(request.get_json()["id_ip"])
+                global node
+                node.peers.update(request.get_json()["peers"])
+                node.id_ip.update(request.get_json()["id_ip"])
                 return "Updated peers", 200
         finally:
                 glock.release()
@@ -332,7 +347,8 @@ def add_peers():
 #endPoint to get ids
 @app.route('/get_id_ip', methods=['GET'])
 def get_id_ip():
-        return jsonify({"id_ip": id_ip}), 200
+        global node
+        return jsonify({"id_ip": node.id_ip}), 200
 
 #Route to add a block someone else mined
 @app.route('/add_block', methods=['POST'])
@@ -379,19 +395,22 @@ def validate_and_add_block():
 def mine_a_block():
         transactions = request.get_json()
         # Validate that transactions are good and mine a block
-        node.validate_and_mine(transactions)
+        if not node.validate_and_mine(transactions):
+                return "Invalidation failed", 400
+        else:
+                return "Success", 200
 
 
-def announce_new_block(newblock):
-        #for (_,peer) in peers.items():
-        def threadFunc(peer, newblock):
-                url = "{}add_block".format(peer)
-                headers = {'Content-Type': "application/json"}
-                print("announce is hitting : ", url)
-                requests.post(url, data=json.dumps(
-                    newblock.__dict__, sort_keys=True), headers=headers)
-        for peer in [p for (_, p) in peers.items() if p != myWallet.myAddress]:
-                _thread.start_new_thread(threadFunc, (peer, newblock))
+# def announce_new_block(newblock):
+#         #for (_,peer) in peers.items():
+#         def threadFunc(peer, newblock):
+#                 url = "{}add_block".format(peer)
+#                 headers = {'Content-Type': "application/json"}
+#                 print("announce is hitting : ", url)
+#                 requests.post(url, data=json.dumps(
+#                     newblock.__dict__, sort_keys=True), headers=headers)
+#         for peer in [p for (_, p) in peers.items() if p != myWallet.myAddress]:
+#                 _thread.start_new_thread(threadFunc, (peer, newblock))
 
 
 # get last block transactions from the blockchain
