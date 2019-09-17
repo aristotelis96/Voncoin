@@ -106,7 +106,7 @@ class node:
 
     #Register this node to ring
     def register_to_ring(self, bootstrap_address):
-        #First delete wallets (bootstrap will send you the correct ones, or find them searching chain)
+        #First delete wallets (UTXOs) (bootstrap will send you the correct ones, or find them searching chain)
         self.wallets = {}
         data = {"node_address": self.address, "public_key": str(self.wallet.publickey.decode('utf-8'))}
         headers = {'Content-Type': "application/json"}
@@ -239,7 +239,6 @@ class node:
         if not added:
             print("Block discarded")
             self.valid_chain()
-            #self.setWallets()
             return
         # If added correctly fix wallets
         for tx in transactions:
@@ -268,6 +267,22 @@ class node:
                 current_len = length
                 longest_chain = chain
         if longest_chain:
+            # Need to fix Wallets (UTXOs) for each new block 
+            i = len(self.chain.chain) + 1
+            while i < len(longest_chain.chain):
+                for tx in longest_chain.chain[i].transactions:
+                    for inp in tx.inputs:
+                        try:
+                            self.wallets[tx.sender_address].remove(inp["transaction_id"])
+                        except:
+                            pass
+                    for out in tx.transaction_outputs:
+                        try:
+                            self.wallets[tx.receiver].append(out)
+                        except:
+                            pass
+                i += 1
+            # Finally replace chain
             longest_chain.unconfirmed_transactions = self.chain.unconfirmed_transactions
             self.chain = longest_chain
             return True

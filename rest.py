@@ -48,58 +48,58 @@ glock = _thread.allocate_lock()
 #transaction lock
 txLock = _thread.allocate_lock()
 # Nodes address
-myAddress = ""
+# myAddress = ""
 #global variable wallet
-myWallet = 0
+# myWallet = 0
 
 #Dictionary for peers (Routing Table)
-peers = {}
+# peers = {}
 #peers.update({"http://10.0.0.1:5000/": ""})
 
 # UTXOs for each wallet (Locally)
-wallets = {}
+# wallets = {}
 
 #Ids counter
 idCounter = 0
-id_ip = {}
+# id_ip = {}
 
 #Create new blockchain from dump data (json data)
 
 
-def create_chain_from_dump(chain_dump):
-    global blockchain
-    newblockchain = blockchainModule.Blockchain()
-    for idx, block_data in enumerate(chain_dump):
-        newblock = block.Block(block_data["index"],
-                               block_data["previous_hash"],
-                               block_data["transactions"])
-        newblock.timestamp = block_data["timestamp"]
-        proof = block_data['hash']
-        if idx > 0:
-            newblock.nonce = block_data["nonce"]
-            added = newblockchain.add_block(newblock, proof)
-            if not added:
-                raise Exception("The chain dump is tampered!!")
-        else:  # else the block is a genesis block, no verification needed
-            newblock.hash = proof
-            newblockchain.chain.append(newblock)
-    newblockchain.unconfirmed_transactions = blockchain.unconfirmed_transactions
-    return newblockchain
+# def create_chain_from_dump(chain_dump):
+#     global blockchain
+#     newblockchain = blockchainModule.Blockchain()
+#     for idx, block_data in enumerate(chain_dump):
+#         newblock = block.Block(block_data["index"],
+#                                block_data["previous_hash"],
+#                                block_data["transactions"])
+#         newblock.timestamp = block_data["timestamp"]
+#         proof = block_data['hash']
+#         if idx > 0:
+#             newblock.nonce = block_data["nonce"]
+#             added = newblockchain.add_block(newblock, proof)
+#             if not added:
+#                 raise Exception("The chain dump is tampered!!")
+#         else:  # else the block is a genesis block, no verification needed
+#             newblock.hash = proof
+#             newblockchain.chain.append(newblock)
+#     newblockchain.unconfirmed_transactions = blockchain.unconfirmed_transactions
+#     return newblockchain
 
 # Broadcast transaction Function
 
 
-class broadcast_transaction (threading.Thread):
-    def __init__(self, tx, peer):
-        threading.Thread.__init__(self)
-        self.tx = tx
-        self.peer = peer
+# class broadcast_transaction (threading.Thread):
+#     def __init__(self, tx, peer):
+#         threading.Thread.__init__(self)
+#         self.tx = tx
+#         self.peer = peer
 
-    def run(self):
-        url = self.peer + "new_transaction"
-        headers = {'Content-Type': "application/json"}
-        data = json.dumps(self.tx.to_dict())
-        requests.post(url, data=data, headers=headers)
+#     def run(self):
+#         url = self.peer + "new_transaction"
+#         headers = {'Content-Type': "application/json"}
+#         data = json.dumps(self.tx.to_dict())
+#         requests.post(url, data=data, headers=headers)
 
 #.......................................................................................
 
@@ -174,6 +174,7 @@ def create_new_transaction():
 @app.route('/new_transaction', methods=['POST'])
 def new_transaction():
         global txLock, node
+        txLock.acquire()
         tx_data = request.get_json()
         required_fields = ["sender_address", "receiver_address",
                            "ammount", "transaction_id", "txInput", "signature"]
@@ -184,7 +185,8 @@ def new_transaction():
 
         if not node.receive_transaction(tx_data):
                 return "Invalid transaction", 400
-        return "Success", 200
+        txLock.release()
+        return "Success", 201
         # tx_data = request.get_json()
         # required_fields = ["sender_address", "receiver_address",
         #                    "ammount", "transaction_id", "txInput", "signature"]
@@ -235,8 +237,6 @@ def new_transaction():
         #       tx_data.get('ammount'), " from ", ip, " to: ", recv_ip)
         # while not blockchain.add_new_transaction(tx_data):
         #         mine_unconfirmed_transactions()
-        txLock.release()
-        return "Success", 201
 
 
 @app.route('/chain', methods=['GET'])
