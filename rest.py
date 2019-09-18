@@ -65,7 +65,10 @@ idCounter = 0
 
 #Create new blockchain from dump data (json data)
 
-
+@app.route('/test', methods=['GET'])
+def test():
+        global node
+        return json.dumps(node.nodeTransactions)
 # def create_chain_from_dump(chain_dump):
 #     global blockchain
 #     newblockchain = blockchainModule.Blockchain()

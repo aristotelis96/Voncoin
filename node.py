@@ -9,17 +9,19 @@ import threading
 
 #This class tries to mine a block and then broadcasts it.
 class miner (threading.Thread):
-    def __init__(self, chain, transactions, peers, lock):
+    def __init__(self, chain, transactions, peers, lock, wallet):
         threading.Thread.__init__(self)
         self.transactions = transactions
         self.chain = chain
         self.peers = peers
         self.lock = lock
+        self.wallet = wallet
 
     def run(self):
         try:
             # Make sure only one thread is mining at a time
             self.lock.acquire()
+            print("Starting : ", threading.get_ident())
             # Mine block
             if not self.mine_transactions():                
                 return # If mine fails do not broadcast
@@ -29,7 +31,7 @@ class miner (threading.Thread):
         return
 
     def broadcast_last_block(self):
-        for (_, peer) in self.peers:
+        for peer in [peer for (_,peer) in self.peers.items() if peer != self.wallet.address] :
             url = peer + "add_block"
             headers = {'Content-Type': "application/json"}            
             requests.post(url, data=json.dumps(self.chain.last_block.__dict__, sort_keys=True), headers=headers)
@@ -38,11 +40,12 @@ class miner (threading.Thread):
     def mine_transactions(self):
         result = self.chain.mine(self.transactions)
         if not result:
+            print("i failed")
             return False # If mine fails, return
         proof = result.hash
-        delattr(result, "hash")        
+        delattr(result, "hash")     
         self.chain.add_block(result, proof)
-        return
+        return True
 
  
 
@@ -217,9 +220,6 @@ class node:
         thread.start()
         return
 
-    #def validdate_transaction():
-        #use of signature and NBCs balance
-
     # Add a transaction to current block
     # TODO this need to be fixed, chain is not being produced correctly
     def add_transaction_to_block(self, newTx):
@@ -227,9 +227,11 @@ class node:
         self.nodeTransactions.append(newTx)
         #if enough transactions  mine
         try:
-            while not (self.chain.add_new_transaction(self.nodeTransactions[-1].to_dict())):        
-                self.mine(self.chain.unconfirmed_transactions)
+            if (self.chain.add_new_transaction(self.nodeTransactions[-1].to_dict())):        
+                #self.mine(self.chain.unconfirmed_transactions)
                 self.nodeTransactions.pop()
+            else:
+                self.mine(self.chain.unconfirmed_transactions)
         except:
             pass
             
@@ -239,19 +241,20 @@ class node:
         for peer in  [p for (_,p) in self.peers.items() if p!=self.wallet.address]:
             url = peer + "mine_a_block"
             headers = {'Content-Type': "application/json"}
-            data = json.dumps([tx for tx in transactions])
+            data = json.dumps([tx for tx in transactions])            
             requests.post(url, data=data, headers=headers)
 
         #start miner thread
-        self.miner(self.chain, transactions, self.peers, self.lock).start()
+        self.miner(self.chain, transactions, self.peers, self.lock, self.wallet).start()
 
     #Function to mine not validated transactions (TXs from other peers)
     def validate_and_mine(self, transactions):
         for tx in transactions:
             if not (transaction.verify_signature(tx)):
                 return False
+        self.nodeTransactions = [nodeTx for nodeTx in self.nodeTransactions if nodeTx.to_dict() not in transactions]
         # No need to broadcast now just mine the block
-        self.miner(self.chain, transactions, self.peers, self.lock).start()
+        self.miner(self.chain, transactions, self.peers, self.lock, self.wallet).start()
         return True
 
    # Add a block
@@ -293,7 +296,10 @@ class node:
             response = requests.get(url)
             length = response.json()['length']
             # create chain and check if is valid and bigger
-            chain = tools.create_chain_from_dump(response.json()['chain'])
+            try:
+                chain = tools.create_chain_from_dump(response.json()['chain'])
+            except:
+                return False
             if length > current_len and chain.check_chain_validity():
                 current_len = length
                 longest_chain = chain

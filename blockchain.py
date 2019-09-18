@@ -56,7 +56,6 @@ class Blockchain:
             return False
         if not self.is_valid_proof(block, proof):
             print(proof)
-            print(json.dump(block.__dict__))
             print("ER2")
             return False
         block.hash = proof
