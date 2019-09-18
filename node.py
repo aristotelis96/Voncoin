@@ -17,13 +17,15 @@ class miner (threading.Thread):
         self.lock = lock
 
     def run(self):
-        # Make sure only one thread is mining at a time
-        self.lock.acquire()
-        # Mine block
-        if not self.mine_transactions():
-            return # If mine fails do not broadcast
-        self.broadcast_last_block()
-        self.lock.release()
+        try:
+            # Make sure only one thread is mining at a time
+            self.lock.acquire()
+            # Mine block
+            if not self.mine_transactions():                
+                return # If mine fails do not broadcast
+            self.broadcast_last_block()
+        finally:
+            self.lock.release()
         return
 
     def broadcast_last_block(self):
@@ -38,16 +40,9 @@ class miner (threading.Thread):
         if not result:
             return False # If mine fails, return
         proof = result.hash
-        delattr(result, "hash")
+        delattr(result, "hash")        
         self.chain.add_block(result, proof)
-
-        # if not result:
-        #     return -1
-        # self.broadcast_block(result)
-        # proof = result.hash
-        # delattr(result, "hash")
-        # self.chain.add_block(result, proof)
-        # return result.index
+        return
 
  
 
@@ -65,7 +60,7 @@ class node:
         self.wallets = {}
         self.miner = miner
         self.lock = threading.Lock()
-
+        self.nodeTransactions = []
     @property
     def wallet_balance(self):
         ammount = sum(UTXO.get("ammount") for UTXO in self.wallets[self.wallet.address])
@@ -228,15 +223,20 @@ class node:
     # Add a transaction to current block
     # TODO this need to be fixed, chain is not being produced correctly
     def add_transaction_to_block(self, newTx):
+        # First add to local-node transaction list
+        self.nodeTransactions.append(newTx)
         #if enough transactions  mine
-        while not (self.chain.add_new_transaction(newTx.to_dict())):        
-            self.mine(self.chain.unconfirmed_transactions)
-            self.chain.unconfirmed_transactions = []
-    
+        try:
+            while not (self.chain.add_new_transaction(self.nodeTransactions[-1].to_dict())):        
+                self.mine(self.chain.unconfirmed_transactions)
+                self.nodeTransactions.pop()
+        except:
+            pass
+            
     #Function to mine validated transactions
     def mine(self, transactions):
         #broadcast to everyone the block to be mined        
-        for (_, peer) in self.peers.items():
+        for peer in  [p for (_,p) in self.peers.items() if p!=self.wallet.address]:
             url = peer + "mine_a_block"
             headers = {'Content-Type': "application/json"}
             data = json.dumps([tx for tx in transactions])
@@ -256,6 +256,7 @@ class node:
 
    # Add a block
     def add_block(self, index, previous_hash, transactions, timestamp, nonce, proof):
+        print("TRYING TO ADD : " + str(index))
         #create new block
         newBlk = block.Block(index, previous_hash, transactions)
         newBlk.timestamp = timestamp
