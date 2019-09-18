@@ -169,17 +169,42 @@ class node:
     def receive_transaction(self, tx):
         if not transaction.verify_signature(tx):
             print("failed to verify signature in /new_transaction")
-            return "Error"
+            return False
         #Validate inputs are indeed UTXOs
         ip = self.peers.get(tx["sender_address"])
-        UXTOs = self.wallets[ip]        
+        UTXOs = self.wallets[ip]        
         for txInput in tx["txInput"]:
-            if not any(inp["transaction_id"] == txInput["transaction_id"] for inp in UXTOs):
+            if not any(inp["transaction_id"] == txInput["transaction_id"] for inp in UTXOs):
                 print("Invalid inputs")
                 return False
         # Remove inputs from wallet and find total coins used
-        #TODO
+        coinsUsed = 0
+        newUTXOs = UTXOs
+        for txInput in tx["txInput"]:
+            tbRemoved = (next(inp for inp in UTXOs if inp["transaction_id"] == txInput["transaction_id"]))
+            if not tbRemoved["recipient_address"] == tx["sender_address"]:
+                print("Wrong transaction, discarding")
+                return False
+            coinsUsed += tbRemoved["ammount"]
+            newUTXOs.remove(tbRemoved)
+        #Replace updated UXTOs for sender
+        self.wallets[ip] = newUTXOs
+        output = []
+        output.append({"id": 0, "transaction_id": tx.get("transaction_id"), "ammount": tx.get(
+            "ammount"), "recipient_address": tx.get("receiver_address")})
+        recv_ip = self.peers.get(tx.get("receiver_address"))
+        if not self.wallets.get(recv_ip):
+                self.wallets[recv_ip] = []
+        self.wallets[recv_ip].append(output[0])
+        change = coinsUsed - tx.get("ammount")
+        if(change > 0):
+                output.append({"id": 1, "transaction_id": tx.get("transaction_id"), "ammount": coinsUsed -
+                               tx.get("ammount"), "recipient_address": tx.get("sender_address")})
+                self.wallets[ip].append(output[1])
+        tx["txOutput"] = output    
+        self.add_transaction_to_block(transaction.parse_transaction(tx))
         return True
+
     # Send a transaction to a peer
     def send_transaction(self, transaction, peer):
         class send_transaction (threading.Thread):
@@ -201,6 +226,7 @@ class node:
         #use of signature and NBCs balance
 
     # Add a transaction to current block
+    # TODO this need to be fixed, chain is not being produced correctly
     def add_transaction_to_block(self, newTx):
         #if enough transactions  mine
         while not (self.chain.add_new_transaction(newTx.to_dict())):        
@@ -210,10 +236,10 @@ class node:
     #Function to mine validated transactions
     def mine(self, transactions):
         #broadcast to everyone the block to be mined        
-        for (_, peer) in self.peers:
+        for (_, peer) in self.peers.items():
             url = peer + "mine_a_block"
             headers = {'Content-Type': "application/json"}
-            data = json.dumps(transactions.__dict__)
+            data = json.dumps([tx for tx in transactions])
             requests.post(url, data=data, headers=headers)
 
         #start miner thread
@@ -240,11 +266,15 @@ class node:
             print("Block discarded")
             self.valid_chain()
             return
-        # If added correctly fix wallets
+        # If added correctly fix wallets AND unconfirmed_transactions
         for tx in transactions:
             for (_, UTXOs) in self.wallets.items():
                 if tx["transaction_id"] in UTXOs:
                     UTXOs.remove(tx["transaction_id"])
+            try:
+                self.chain.unconfirmed_transactions.remove(tx["transaction_id"])
+            except:
+                pass
         return
 
         
@@ -269,8 +299,9 @@ class node:
         if longest_chain:
             # Need to fix Wallets (UTXOs) for each new block 
             i = len(self.chain.chain) + 1
-            while i < len(longest_chain.chain):
-                for tx in longest_chain.chain[i].transactions:
+            for blk in [blk for blk in longest_chain.chain if blk.index>len(self.chain.chain)]:
+            #while i < len(longest_chain.chain):
+                for tx in blk.transactions:
                     for inp in tx.inputs:
                         try:
                             self.wallets[tx.sender_address].remove(inp["transaction_id"])

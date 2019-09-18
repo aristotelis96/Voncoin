@@ -19,14 +19,20 @@ def verify_signature(tx):
         verifier = SIGN.new(pubKey)
         return (verifier.verify(toTest.transaction_id_Obj, tx.get("signature").encode('cp437')))
 
+def parse_transaction(tx):
+        newTx = Transaction(tx["sender_address"], tx["receiver_address"], tx["ammount"], tx["txInput"])
+        newTx.transaction_id = tx["transaction_id"]
+        newTx.transaction_outputs = tx["txOutput"]
+        newTx.signature = tx["signature"].encode('cp437')
+        return newTx
 class Transaction:
 
-        def __init__(self, sender_address, recipient_address, value, inputs):
+        def __init__(self, sender_address, receiver_address, value, inputs):
                 ##set
                 #self.sender_address: Wallet's public key FROM which the transfer is made
                 self.sender_address = sender_address
                 #self.receiver_address: Wallet's public key TO which the transfer is made
-                self.receiver_address = recipient_address
+                self.receiver_address = receiver_address
                 #self.amount: Amount to be transfered
                 self.ammount = value
                 #self.transaction_inputs: List of Transaction Input 
