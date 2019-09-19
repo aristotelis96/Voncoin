@@ -33,18 +33,18 @@ class miner (threading.Thread):
     def broadcast_last_block(self):
         for peer in [peer for (_,peer) in self.peers.items() if peer != self.wallet.address] :
             url = peer + "add_block"
-            headers = {'Content-Type': "application/json"}            
+            headers = {'Content-Type': "application/json"}               
             requests.post(url, data=json.dumps(self.chain.last_block.__dict__, sort_keys=True), headers=headers)
 
     #mine a block
     def mine_transactions(self):
-        result = self.chain.mine(self.transactions)
+        result = self.chain.mine(self.transactions)        
         if not result:
             print("i failed")
             return False # If mine fails, return
         proof = result.hash
-        delattr(result, "hash")     
-        self.chain.add_block(result, proof)
+        delattr(result, "hash")             
+        self.chain.add_block(result, proof)   
         return True
 
  
@@ -221,17 +221,17 @@ class node:
         return
 
     # Add a transaction to current block
-    # TODO this need to be fixed, chain is not being produced correctly
     def add_transaction_to_block(self, newTx):
         # First add to local-node transaction list
         self.nodeTransactions.append(newTx)
         #if enough transactions  mine
-        try:
-            if (self.chain.add_new_transaction(self.nodeTransactions[-1].to_dict())):        
-                #self.mine(self.chain.unconfirmed_transactions)
-                self.nodeTransactions.pop()
-            else:
-                self.mine(self.chain.unconfirmed_transactions)
+        try:                        
+            for tx in self.nodeTransactions:
+                if (self.chain.add_new_transaction(tx.to_dict())):                            
+                    self.nodeTransactions.remove(tx)
+                else:
+                    self.mine(self.chain.unconfirmed_transactions)                    
+                    break
         except:
             pass
             
@@ -241,7 +241,7 @@ class node:
         for peer in  [p for (_,p) in self.peers.items() if p!=self.wallet.address]:
             url = peer + "mine_a_block"
             headers = {'Content-Type': "application/json"}
-            data = json.dumps([tx for tx in transactions])            
+            data = json.dumps([tx for tx in transactions])   
             requests.post(url, data=data, headers=headers)
 
         #start miner thread
@@ -251,9 +251,10 @@ class node:
     def validate_and_mine(self, transactions):
         for tx in transactions:
             if not (transaction.verify_signature(tx)):
-                return False
-        self.nodeTransactions = [nodeTx for nodeTx in self.nodeTransactions if nodeTx.to_dict() not in transactions]
-        # No need to broadcast now just mine the block
+                print('invalid')
+                return False        
+        self.nodeTransactions = [nodeTx for nodeTx in self.nodeTransactions if nodeTx.to_dict() not in transactions]                
+        # No need to broadcast now just mine the block       
         self.miner(self.chain, transactions, self.peers, self.lock, self.wallet).start()
         return True
 
@@ -279,6 +280,7 @@ class node:
                 self.chain.unconfirmed_transactions.remove(tx["transaction_id"])
             except:
                 pass
+        self.nodeTransactions = [nodeTx for nodeTx in self.nodeTransactions if nodeTx.to_dict() not in transactions]
         return
 
         

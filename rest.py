@@ -397,7 +397,7 @@ def validate_and_add_block():
 @app.route('/mine_a_block', methods=['POST'])
 def mine_a_block():
         transactions = request.get_json()
-        # Validate that transactions are good and mine a block
+         # Validate that transactions are good and mine a block
         if not node.validate_and_mine(transactions):
                 return "Invalidation failed", 400
         else:

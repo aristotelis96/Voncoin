@@ -62,15 +62,16 @@ class Blockchain:
         self.lock.acquire()
         self.chain.append(block)
         # Remove new Block transactions from unconfirmed transactions list
-        for tx in block.transactions:
-           for unconfirmed in self.unconfirmed_transactions:        
-               if tx["transaction_id"] == unconfirmed["transaction_id"]: self.unconfirmed_transactions.remove(unconfirmed)
+        self.unconfirmed_transactions = [tx for tx in self.unconfirmed_transactions if tx not in block.transactions]
+        # for tx in block.transactions:
+        #    for unconfirmed in self.unconfirmed_transactions:        
+        #        if tx["transaction_id"] == unconfirmed["transaction_id"]: self.unconfirmed_transactions.remove(unconfirmed)
         self.lock.release()
         return True
 
-    def mine(self, transactions):
+    def mine(self, txs):
         last_block = self.last_block
-        newBlock = block.Block(self.last_block.index + 1, last_block.hash, transactions)
+        newBlock = block.Block(self.last_block.index + 1, last_block.hash, txs)
         self.mining = True
         proof = self.proof_of_work(newBlock)
         if not proof:
