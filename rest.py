@@ -420,9 +420,10 @@ def mine_a_block():
 
 @app.route('/view_transactions', methods=['GET'])
 def get_transactions():
-    lastBlock = blockchain.chain[-1]
-    response = {'transactions': lastBlock.transactions}
-    return jsonify(response), 200
+        global node
+        lastBlock = node.chain.last_block
+        response = {'transactions': lastBlock.transactions}
+        return jsonify(response), 200
 
 
 # run it once fore every node

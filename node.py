@@ -225,16 +225,12 @@ class node:
         # First add to local-node transaction list
         self.nodeTransactions.append(newTx)
         #if enough transactions  mine
-        try:                        
-            for tx in self.nodeTransactions:
-                if (self.chain.add_new_transaction(tx.to_dict())):                            
-                    self.nodeTransactions.remove(tx)
-                else:
-                    self.mine(self.chain.unconfirmed_transactions)                    
-                    break
-        except:
-            pass
-            
+        #try:  
+        while self.nodeTransactions:
+            if not (self.chain.add_new_transaction(self.nodeTransactions.pop(0).to_dict())):
+                self.mine(self.chain.unconfirmed_transactions)
+                self.chain.unconfirmed_transactions = []
+
     #Function to mine validated transactions
     def mine(self, transactions):
         #broadcast to everyone the block to be mined        

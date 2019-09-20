@@ -7,7 +7,7 @@ from Crypto.Random import random
 class Blockchain:
     def __init__(self):
         self.chain = []
-        self.difficulty = 2
+        self.difficulty = 4
         self.capacity = 1
         self.unconfirmed_transactions = [] 
         self.mining = False
@@ -69,9 +69,9 @@ class Blockchain:
         self.lock.release()
         return True
 
-    def mine(self, txs):
+    def mine(self, transactions):
         last_block = self.last_block
-        newBlock = block.Block(self.last_block.index + 1, last_block.hash, txs)
+        newBlock = block.Block(self.last_block.index + 1, last_block.hash, transactions)
         self.mining = True
         proof = self.proof_of_work(newBlock)
         if not proof:
