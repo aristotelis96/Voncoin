@@ -97,7 +97,7 @@ class node:
             "ammount") - newNodeTx.ammount, "recipient_address": self.wallet.publickey.decode('utf-8')}
         output = [output0, output1]
         newNodeTx.transaction_outputs = output
-        self.add_transaction_to_block(newNodeTx)
+        self.commit_transaction(newNodeTx)
         self.wallets[node_address] = [output0]
         self.wallets[self.wallet.address] = [output1]
         return
@@ -161,7 +161,7 @@ class node:
             output.append({"id": 1, "transaction_id": newTx.transaction_id, "ammount": total - ammount, "recipient_address": self.wallet.publickey.decode('utf-8')})
             self.wallets[sender].append(output[1])
         newTx.transaction_outputs = output
-        self.add_transaction_to_block(newTx)
+        self.commit_transaction(newTx)
         return
     
     def receive_transaction(self, tx):
@@ -200,7 +200,7 @@ class node:
                                tx.get("ammount"), "recipient_address": tx.get("sender_address")})
                 self.wallets[ip].append(output[1])
         tx["txOutput"] = output    
-        self.add_transaction_to_block(transaction.parse_transaction(tx))
+        self.commit_transaction(transaction.parse_transaction(tx))
         return True
 
     # Send a transaction to a peer
@@ -221,7 +221,7 @@ class node:
         return
 
     # Add a transaction to current block
-    def add_transaction_to_block(self, newTx):
+    def commit_transaction(self, newTx):
         # First add to local-node transaction list
         self.nodeTransactions.append(newTx)
         #if enough transactions  mine
