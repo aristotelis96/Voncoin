@@ -358,13 +358,14 @@ def get_id_ip():
 def validate_and_add_block():
     # glock.acquire()
     global node
-    block_data = request.get_json()
+    data = request.get_json()
+    block_data = data["block"]
+    proof = data["proof"]
     index = block_data["index"]
     previous_hash = block_data["previous_hash"]
     transactions = block_data["transactions"]
     timestamp = block_data["timestamp"]
-    nonce = block_data["nonce"]
-    proof = block_data['hash']
+    nonce = block_data["nonce"]    
     node.add_block(index, previous_hash, transactions, timestamp, nonce, proof)
     return "block added to chain", 200
 
@@ -396,9 +397,9 @@ def validate_and_add_block():
 # Route to mine a block that someone else needs
 @app.route('/mine_a_block', methods=['POST'])
 def mine_a_block():
-        transactions = request.get_json()
+        newBlock = request.get_json()
          # Validate that transactions are good and mine a block
-        if not node.validate_and_mine(transactions):
+        if not node.validate_and_mine(newBlock):
                 return "Invalidation failed", 400
         else:
                 return "Success", 200

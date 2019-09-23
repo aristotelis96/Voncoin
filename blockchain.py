@@ -69,15 +69,23 @@ class Blockchain:
         self.lock.release()
         return True
 
-    def mine(self, transactions):
+    def create_block(self,transactions = None):
         last_block = self.last_block
+        if not transactions:
+            transactions = self.unconfirmed_transactions
         newBlock = block.Block(self.last_block.index + 1, last_block.hash, transactions)
+        return newBlock
+
+    def mine(self, newBlock = None):
+        # last_block = self.last_block
+        # newBlock = block.Block(self.last_block.index + 1, last_block.hash, self.unconfirmed_transactions)
+        if not newBlock:
+            newBlock = self.create_block()
         self.mining = True
         proof = self.proof_of_work(newBlock)
         if not proof:
             return False
-        newBlock.hash = proof
-        return newBlock
+        return proof
         # if len(self.unconfirmed_transactions) < self.capacity:
         #     return False
         # last_block = self.last_block
@@ -87,7 +95,8 @@ class Blockchain:
         # if not proof:
         #     return False
         # new_block.hash = proof
-        #self.add_block(new_block, proof)
+        #self.
+        # _block(new_block, proof)
         #self.unconfirmed_transactions = []
 
     def check_chain_validity(self):

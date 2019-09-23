@@ -9,9 +9,9 @@ import threading
 
 #This class tries to mine a block and then broadcasts it.
 class miner (threading.Thread):
-    def __init__(self, chain, transactions, peers, lock, wallet):
+    def __init__(self, chain, newBlock, peers, lock, wallet):
         threading.Thread.__init__(self)
-        self.transactions = transactions
+        self.newBlock = newBlock
         self.chain = chain
         self.peers = peers
         self.lock = lock
@@ -23,7 +23,7 @@ class miner (threading.Thread):
             self.lock.acquire()
             print("Starting : ", threading.get_ident())
             # Mine block
-            if not self.mine_transactions():                
+            if not self.mine_block():                
                 return # If mine fails do not broadcast
             self.broadcast_last_block()
         finally:
@@ -63,7 +63,9 @@ class node:
         self.wallets = {}
         self.miner = miner
         self.lock = threading.Lock()
-        self.nodeTransactions = []
+        self.commitLock = threading.Lock()
+        self.mineLock = threading.Lock()
+
     @property
     def wallet_balance(self):
         ammount = sum(UTXO.get("ammount") for UTXO in self.wallets[self.wallet.address])
@@ -222,36 +224,57 @@ class node:
 
     # Add a transaction to current block
     def commit_transaction(self, newTx):
+        self.commitLock.acquire()
         # First add to local-node transaction list
-        self.nodeTransactions.append(newTx)
-        #if enough transactions  mine
+        while not (self.chain.add_new_transaction(newTx.to_dict())):
+            self.chain.mine()
+        self.commitLock.release()
+        #if enough transactions mine
         #try:  
-        while self.nodeTransactions:
-            if not (self.chain.add_new_transaction(self.nodeTransactions.pop(0).to_dict())):
-                self.mine(self.chain.unconfirmed_transactions)
-                self.chain.unconfirmed_transactions = []
+        
+        # while self.nodeTransactions:
+        #     if not (self.chain.add_new_transaction(self.nodeTransactions.pop(0).to_dict())):
+        #         self.mine(self.chain.unconfirmed_transactions)
+        #         self.chain.unconfirmed_transactions = []
 
     #Function to mine validated transactions
-    def mine(self, transactions):
-        #broadcast to everyone the block to be mined        
-        for peer in  [p for (_,p) in self.peers.items() if p!=self.wallet.address]:
-            url = peer + "mine_a_block"
-            headers = {'Content-Type': "application/json"}
-            data = json.dumps([tx for tx in transactions])   
-            requests.post(url, data=data, headers=headers)
+    def mine(self, newBlock = None):
+        # If block is provided no need to broadcast or create it from unconfirmed transactions
+        if not newBlock:
+            newBlock = self.chain.create_block()
+            #broadcast to everyone the block to be mined            
+            for peer in  [p for (_,p) in self.peers.items() if p!=self.wallet.address]:
+                url = peer + "mine_a_block"
+                headers = {'Content-Type': "application/json"}
+                data = json.dumps(newBlock.__dict__)   
+                requests.post(url, data=data, headers=headers)
 
-        #start miner thread
-        self.miner(self.chain, transactions, self.peers, self.lock, self.wallet).start()
+        #start mining
+        proof = self.chain.mine()
+        # Exit if did not finish
+        if not proof:
+            return
+
+        self.chain.add_block(newBlock, proof)
+        for peer in [peer for (_,peer) in self.peers.items() if peer != self.wallet.address] :
+            url = peer + "add_block"
+            headers = {'Content-Type': "application/json"}   
+            data = {
+                "proof" : proof,
+                "block" : newBlock.__dict__            
+            }
+            requests.post(url, json.dumps(data), sort_keys=True), headers=headers)
 
     #Function to mine not validated transactions (TXs from other peers)
-    def validate_and_mine(self, transactions):
-        for tx in transactions:
+    def validate_and_mine(self, newBlock):
+        for tx in newBlock.transactions:
             if not (transaction.verify_signature(tx)):
                 print('invalid')
                 return False        
-        self.nodeTransactions = [nodeTx for nodeTx in self.nodeTransactions if nodeTx.to_dict() not in transactions]                
         # No need to broadcast now just mine the block       
-        self.miner(self.chain, transactions, self.peers, self.lock, self.wallet).start()
+        newBlock = block.parse_block(newBlock["index"], newBlock["previous_hash"], newBlock["transactions"], newBlock["timestamp"],newBlock["nonce"])
+        self.mine(newBlock)
+
         return True
 
    # Add a block
@@ -267,16 +290,12 @@ class node:
             print("Block discarded")
             self.valid_chain()
             return
-        # If added correctly fix wallets AND unconfirmed_transactions
+        # If added correctly fix wallets
         for tx in transactions:
             for (_, UTXOs) in self.wallets.items():
                 if tx["transaction_id"] in UTXOs:
-                    UTXOs.remove(tx["transaction_id"])
-            try:
-                self.chain.unconfirmed_transactions.remove(tx["transaction_id"])
-            except:
-                pass
-        self.nodeTransactions = [nodeTx for nodeTx in self.nodeTransactions if nodeTx.to_dict() not in transactions]
+                    UTXOs.remove(tx["transaction_id"])                
+        
         return
 
         
