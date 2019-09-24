@@ -26,6 +26,8 @@ class Blockchain:
             block.nonce += 1
             computed_hash = block.compute_hash()
             if not self.mining:
+                print("I failed to mine a block")
+
                 return False
         print("I successfully mined a block")
         return computed_hash
@@ -49,8 +51,6 @@ class Blockchain:
         return True
 
     def add_block(self, block, proof):
-        # STOP mining first        
-        self.mining = False
         previous_hash = self.last_block.hash
         if previous_hash != block.previous_hash:
             return False
@@ -59,9 +59,11 @@ class Blockchain:
             print("ER2")
             return False
         block.hash = proof
+        # STOP mining        
+        self.mining = False
         self.lock.acquire()
         self.chain.append(block)
-        # Remove new Block transactions from unconfirmed transactions list
+        # Remove new Block transactions from unconfirmed transactions list      
         self.unconfirmed_transactions = [tx for tx in self.unconfirmed_transactions if tx not in block.transactions]
         # for tx in block.transactions:
         #    for unconfirmed in self.unconfirmed_transactions:        
@@ -84,8 +86,8 @@ class Blockchain:
         self.mining = True
         proof = self.proof_of_work(newBlock)
         if not proof:
-            return False
-        return proof
+            return newBlock, False
+        return newBlock, proof
         # if len(self.unconfirmed_transactions) < self.capacity:
         #     return False
         # last_block = self.last_block

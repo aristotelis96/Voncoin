@@ -394,15 +394,16 @@ def validate_and_add_block():
 # #       glock.release()
 #      return "Block added to chain", 201
 
+
 # Route to mine a block that someone else needs
 @app.route('/mine_a_block', methods=['POST'])
 def mine_a_block():
         newBlock = request.get_json()
-         # Validate that transactions are good and mine a block
-        if not node.validate_and_mine(newBlock):
-                return "Invalidation failed", 400
-        else:
-                return "Success", 200
+        # Start a thread to help mining and return api call
+        global node
+        thread = threading.Thread(target=node.validate_and_mine, args=(newBlock,))
+        thread.start()
+        return "Success", 200
 
 
 # def announce_new_block(newblock):

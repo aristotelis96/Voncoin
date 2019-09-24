@@ -7,48 +7,6 @@ import requests
 import json
 import threading
 
-#This class tries to mine a block and then broadcasts it.
-class miner (threading.Thread):
-    def __init__(self, chain, newBlock, peers, lock, wallet):
-        threading.Thread.__init__(self)
-        self.newBlock = newBlock
-        self.chain = chain
-        self.peers = peers
-        self.lock = lock
-        self.wallet = wallet
-
-    def run(self):
-        try:
-            # Make sure only one thread is mining at a time
-            self.lock.acquire()
-            print("Starting : ", threading.get_ident())
-            # Mine block
-            if not self.mine_block():                
-                return # If mine fails do not broadcast
-            self.broadcast_last_block()
-        finally:
-            self.lock.release()
-        return
-
-    def broadcast_last_block(self):
-        for peer in [peer for (_,peer) in self.peers.items() if peer != self.wallet.address] :
-            url = peer + "add_block"
-            headers = {'Content-Type': "application/json"}               
-            requests.post(url, data=json.dumps(self.chain.last_block.__dict__, sort_keys=True), headers=headers)
-
-    #mine a block
-    def mine_transactions(self):
-        result = self.chain.mine(self.transactions)        
-        if not result:
-            print("i failed")
-            return False # If mine fails, return
-        proof = result.hash
-        delattr(result, "hash")             
-        self.chain.add_block(result, proof)   
-        return True
-
- 
-
     
 class node:
     def __init__(self, address):
@@ -61,10 +19,8 @@ class node:
         self.peers = ({str(self.wallet.publickey.decode('utf-8')):address})
         self.id_ip = {"id0": address}
         self.wallets = {}
-        self.miner = miner
         self.lock = threading.Lock()
         self.commitLock = threading.Lock()
-        self.mineLock = threading.Lock()
 
     @property
     def wallet_balance(self):
@@ -89,7 +45,9 @@ class node:
         newNodeTx.sign_transaction(self.wallet.privatekey)
         # we need to broadcast transactiont to everyone and then add to our block (except myself and registering node *register node can't verify it for now*)
         for peer in [p for (_,p) in self.peers.items() if p != self.wallet.address and p != node_address]:
-            self.send_transaction(newNodeTx, peer)
+            thread = threading.Thread(target=self.send_transaction, args=(newNodeTx, peer))
+            thread.start()
+            #self.send_transaction(newNodeTx, peer)
         #we didnt broadcast to self, no need to validate, just create outputs
         #remove from utxo, while registering only 1 UTXO in list
         UTXO = self.wallets.pop(self.wallet.address)[0]
@@ -134,6 +92,23 @@ class node:
         self.chain.create_genesis_block(initTransaction)
         return
 
+    # Send a transaction to a peer
+    def send_transaction(self, transaction, peer):
+        # class send_transaction (threading.Thread):
+        #     def __init__(self, tx, peer):
+        #         threading.Thread.__init__(self)
+        #         self.tx = tx
+        #         self.peer = peer
+
+        # def run(self):
+        url = peer + "new_transaction"
+        headers = {'Content-Type': "application/json"}
+        data = json.dumps(transaction.to_dict())
+        requests.post(url, data=data, headers=headers)
+        # thread = send_transaction(transaction, peer)
+        # thread.start()
+        return
+
     def create_transaction(self, sender, receiver, ammount):
         if (sender != self.wallet.address):
             return "Wrong sender IP"
@@ -154,7 +129,9 @@ class node:
         newTx.sign_transaction(self.wallet.privatekey)
         #Broadcast TX
         for peer in [p for (_,p) in self.peers.items() if p!=self.wallet.address]:
-            self.send_transaction(newTx, peer)
+            thread = threading.Thread(target=self.send_transaction, args=(newTx, peer))
+            thread.start()
+            #self.send_transaction(newTx, peer)
         output = []
         output.append({"id": 0, "transaction_id": newTx.transaction_id, "ammount": ammount, "recipient_address": recipient_key})
         self.wallets[receiver].append(output[0])
@@ -205,29 +182,14 @@ class node:
         self.commit_transaction(transaction.parse_transaction(tx))
         return True
 
-    # Send a transaction to a peer
-    def send_transaction(self, transaction, peer):
-        class send_transaction (threading.Thread):
-            def __init__(self, tx, peer):
-                threading.Thread.__init__(self)
-                self.tx = tx
-                self.peer = peer
-
-            def run(self):
-                url = self.peer + "new_transaction"
-                headers = {'Content-Type': "application/json"}
-                data = json.dumps(self.tx.to_dict())
-                requests.post(url, data=data, headers=headers)
-        thread = send_transaction(transaction, peer)
-        thread.start()
-        return
+    
 
     # Add a transaction to current block
     def commit_transaction(self, newTx):
         self.commitLock.acquire()
         # First add to local-node transaction list
         while not (self.chain.add_new_transaction(newTx.to_dict())):
-            self.chain.mine()
+            self.mine()
         self.commitLock.release()
         #if enough transactions mine
         #try:  
@@ -239,43 +201,68 @@ class node:
 
     #Function to mine validated transactions
     def mine(self, newBlock = None):
-        # If block is provided no need to broadcast or create it from unconfirmed transactions
-        if not newBlock:
-            newBlock = self.chain.create_block()
-            #broadcast to everyone the block to be mined            
-            for peer in  [p for (_,p) in self.peers.items() if p!=self.wallet.address]:
-                url = peer + "mine_a_block"
-                headers = {'Content-Type': "application/json"}
-                data = json.dumps(newBlock.__dict__)   
-                requests.post(url, data=data, headers=headers)
+        try:
+            self.lock.acquire()
+            # If block is provided no need to broadcast or create it from unconfirmed transactions
+            if not newBlock:
+                newBlock = self.chain.create_block()
+                #broadcast to everyone the block to be mined            
+                for peer in  [p for (_,p) in self.peers.items() if p!=self.wallet.address]:
+                    url = peer + "mine_a_block"
+                    headers = {'Content-Type': "application/json"}
+                    data = json.dumps(newBlock.__dict__, sort_keys=True)
+                    def send(url, data, headers):
+                        requests.post(url, data=data, headers=headers)
+                    thread = threading.Thread(target=send, args=(url, data, headers))
+                    thread.start()
 
-        #start mining
-        proof = self.chain.mine()
-        # Exit if did not finish
-        if not proof:
+            #start mining        
+            newBlock, proof = self.chain.mine()   
+            # Exit if did not finish
+            if not proof:
+                return
+
+            self.chain.add_block(newBlock, proof)
+            for peer in [peer for (_,peer) in self.peers.items() if peer != self.wallet.address] :
+                url = peer + "add_block"
+                headers = {'Content-Type': "application/json"}   
+                data = {"proof" : proof, "block" : newBlock.__dict__ }
+                def send(url, data, headers):
+                    requests.post(url, json.dumps(data, sort_keys=True), headers=headers)
+                thread = threading.Thread(target=send, args=(url, data, headers))
+                thread.start()
             return
-
-        self.chain.add_block(newBlock, proof)
-        for peer in [peer for (_,peer) in self.peers.items() if peer != self.wallet.address] :
-            url = peer + "add_block"
-            headers = {'Content-Type': "application/json"}   
-            data = {
-                "proof" : proof,
-                "block" : newBlock.__dict__            
-            }
-            requests.post(url, json.dumps(data), sort_keys=True), headers=headers)
+        finally:
+            self.lock.release()
 
     #Function to mine not validated transactions (TXs from other peers)
     def validate_and_mine(self, newBlock):
-        for tx in newBlock.transactions:
-            if not (transaction.verify_signature(tx)):
-                print('invalid')
-                return False        
-        # No need to broadcast now just mine the block       
-        newBlock = block.parse_block(newBlock["index"], newBlock["previous_hash"], newBlock["transactions"], newBlock["timestamp"],newBlock["nonce"])
-        self.mine(newBlock)
+        try:
+            self.lock.acquire()
+            newBlock = block.parse_block(newBlock["index"], newBlock["previous_hash"], newBlock["transactions"], newBlock["timestamp"])
+            for tx in newBlock.transactions:
+                if not (transaction.verify_signature(tx)):
+                    print('invalid')
+                    return False        
+            
+            newBlock, proof = self.chain.mine()   
+            # Exit if did not finish
+            if not proof:
+                print("Did not finish Mining")
+                return
 
-        return True
+            self.chain.add_block(newBlock, proof)
+            for peer in [peer for (_,peer) in self.peers.items() if peer != self.wallet.address] :
+                url = peer + "add_block"
+                headers = {'Content-Type': "application/json"}   
+                data = {"proof" : proof, "block" : newBlock.__dict__ }
+                def send(url, data, headers):
+                    requests.post(url, json.dumps(data, sort_keys=True), headers=headers)
+                thread = threading.Thread(target=send, args=(url, data, headers))
+                thread.start()
+            return
+        finally:
+            self.lock.release()
 
    # Add a block
     def add_block(self, index, previous_hash, transactions, timestamp, nonce, proof):
@@ -295,7 +282,7 @@ class node:
             for (_, UTXOs) in self.wallets.items():
                 if tx["transaction_id"] in UTXOs:
                     UTXOs.remove(tx["transaction_id"])                
-        
+        print("ADDED : " + str(index))
         return
 
         
