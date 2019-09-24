@@ -245,7 +245,7 @@ class node:
                     print('invalid')
                     return False        
             
-            newBlock, proof = self.chain.mine()   
+            newBlock, proof = self.chain.mine(newBlock)   
             # Exit if did not finish
             if not proof:
                 print("Did not finish Mining")
