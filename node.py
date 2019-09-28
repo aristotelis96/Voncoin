@@ -40,14 +40,13 @@ class node:
             headers = {'Content-Type': "application/json"}
             requests.post(url, data=json.dumps({"peers": (self.peers), "id_ip": self.id_ip}), headers=headers)
         # Create transaction for new node. 100 NBC from bootstrap
-        inputs = [{"transaction_id": self.wallets.get(self.wallet.address)[0].get("transaction_id"), "id": self.wallets.get(self.wallet.address)[0].get("id")}]
+        inputs = [self.wallets.get(self.wallet.address)[0]]
         newNodeTx = transaction.Transaction(self.wallet.publickey.decode('utf-8'), node_key, 100, inputs)
         newNodeTx.sign_transaction(self.wallet.privatekey)
         # we need to broadcast transactiont to everyone and then add to our block (except myself and registering node *register node can't verify it for now*)
         for peer in [p for (_,p) in self.peers.items() if p != self.wallet.address and p != node_address]:
             thread = threading.Thread(target=self.send_transaction, args=(newNodeTx, peer))
             thread.start()
-            #self.send_transaction(newNodeTx, peer)
         #we didnt broadcast to self, no need to validate, just create outputs
         #remove from utxo, while registering only 1 UTXO in list
         UTXO = self.wallets.pop(self.wallet.address)[0]
@@ -94,36 +93,29 @@ class node:
 
     # Send a transaction to a peer
     def send_transaction(self, transaction, peer):
-        # class send_transaction (threading.Thread):
-        #     def __init__(self, tx, peer):
-        #         threading.Thread.__init__(self)
-        #         self.tx = tx
-        #         self.peer = peer
-
-        # def run(self):
         url = peer + "new_transaction"
         headers = {'Content-Type': "application/json"}
         data = json.dumps(transaction.to_dict())
         requests.post(url, data=data, headers=headers)
-        # thread = send_transaction(transaction, peer)
-        # thread.start()
         return
 
     def create_transaction(self, sender, receiver, amount):
         self.commitLock.acquire()   
         if (sender != self.wallet.address):
             return "Wrong sender IP"
-        UTXOs = self.wallets.get(sender)
+        UTXOs = self.wallets.get(sender)        
         total = 0
         inputs = []
         newUTXOs = UTXOs
         # Use UTXOs from node's wallet
-        for txInput in UTXOs:
-            if total > amount:
+        for txInput in [x for x in UTXOs]:
+            if (total > amount):
                 break
             total += txInput["amount"]
             inputs.append(txInput)
-            newUTXOs.remove(txInput)
+            newUTXOs.remove(txInput)            
+        if total < amount:
+            raise("TOTAL UTXOs DID NOT REACH AMOUNT NEEDED")
         #Find key from ip
         recipient_key = [key for (key, ip) in self.peers.items() if ip == receiver][0]
         newTx = transaction.Transaction(self.wallet.publickey.decode('utf-8'), recipient_key, amount, inputs)
@@ -131,8 +123,7 @@ class node:
         #Broadcast TX
         for peer in [p for (_,p) in self.peers.items() if p!=self.wallet.address]:
             thread = threading.Thread(target=self.send_transaction, args=(newTx, peer))
-            thread.start()
-            #self.send_transaction(newTx, peer)
+            thread.start()            
         output = []
         output.append({"id": 0, "transaction_id": newTx.transaction_id, "amount": amount, "recipient_address": recipient_key})
         self.wallets[receiver].append(output[0])
@@ -195,13 +186,7 @@ class node:
         while not (self.chain.add_new_transaction(newTx.to_dict())):
             print("My unconfirmed full, will mine now")
             self.mine()
-        #if enough transactions mine
-        #try:  
-        
-        # while self.nodeTransactions:
-        #     if not (self.chain.add_new_transaction(self.nodeTransactions.pop(0).to_dict())):
-        #         self.mine(self.chain.unconfirmed_transactions)
-        #         self.chain.unconfirmed_transactions = []
+        return  
 
     #Function to mine validated transactions
     def mine(self, newBlock = None):
@@ -221,7 +206,6 @@ class node:
                         requests.post(url, data=data, headers=headers)
                     thread = threading.Thread(target=send, args=(url, data, headers))
                     thread.start()
-
             #start mining        
             newBlock, proof = self.chain.mine()   
             # Exit if did not finish
@@ -287,17 +271,13 @@ class node:
         # If added correctly fix wallets
         for tx in transactions:
             for (_, UTXOs) in self.wallets.items():
+                if(tx in UTXOs):
+                    print("FOUND ONE")
                 UTXOs = [trans for trans in UTXOs if trans is not tx]
                 # if tx["transaction_id"] in UTXOs:
                 #     UTXOs.remove(tx["transaction_id"])                
         print("ADDED : " + str(index))
         return
-
-        
-
-    #def valid_proof(.., difficulty=MINING_DIFFICULTY):
-
-    #concencus functions
 
     def valid_chain(self):
         #check for the longer chain accroose all nodes
@@ -321,16 +301,15 @@ class node:
             #while i < len(longest_chain.chain):
                 for tx in blk.transactions:
                     for inp in tx["txInput"]:
-                        print(inp)
                         try:
                             self.wallets[tx.sender_address].remove(inp["transaction_id"])
                         except:
-                            print("COULD NOT REMOVE " + inp["amount"])
+                            print("COULD NOT REMOVE ", inp["amount"])
                     for out in tx["txOutput"]:
                         try:
                             self.wallets[tx.receiver].append(out)
                         except:
-                            print("COULD ADD REMOVE " + out["amount"])
+                            print("COULD ADD REMOVE " , out["amount"])
             # Finally replace chain
             longest_chain.unconfirmed_transactions = self.chain.unconfirmed_transactions
             self.chain = longest_chain

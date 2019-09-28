@@ -1,5 +1,3 @@
-
-#import blockchain
 import time
 import Crypto
 import Crypto.Random

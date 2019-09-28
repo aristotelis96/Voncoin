@@ -22,7 +22,7 @@ class Blockchain:
     def proof_of_work(self, block):
         block.nonce = random.getrandbits(64)
         computed_hash = block.compute_hash()
-        while not computed_hash.startswith('0' * self.difficulty):# and self.mining:
+        while not computed_hash.startswith('0' * self.difficulty):
             block.nonce += 1
             computed_hash = block.compute_hash()
             if not self.mining:
@@ -64,10 +64,7 @@ class Blockchain:
         self.mining = False
         self.chain.append(block)
         # Remove new Block transactions from unconfirmed transactions list
-        self.unconfirmed_transactions = [tx for tx in self.unconfirmed_transactions if tx not in block.transactions]        
-        # for tx in block.transactions:
-        #    for unconfirmed in self.unconfirmed_transactions:        
-        #        if tx["transaction_id"] == unconfirmed["transaction_id"]: self.unconfirmed_transactions.remove(unconfirmed)
+        self.unconfirmed_transactions = [tx for tx in self.unconfirmed_transactions if tx not in block.transactions] 
         self.lock.release()
         return True
 
@@ -79,8 +76,6 @@ class Blockchain:
         return newBlock
 
     def mine(self, newBlock = None):
-        # last_block = self.last_block
-        # newBlock = block.Block(self.last_block.index + 1, last_block.hash, self.unconfirmed_transactions)
         if not newBlock:
             newBlock = self.create_block()
         self.mining = True
@@ -88,18 +83,6 @@ class Blockchain:
         if not proof:
             return newBlock, False
         return newBlock, proof
-        # if len(self.unconfirmed_transactions) < self.capacity:
-        #     return False
-        # last_block = self.last_block
-        # new_block = block.Block(index = last_block.index + 1, previous_hash = last_block.hash, transactions = self.unconfirmed_transactions)
-        # self.mining = True
-        # proof = self.proof_of_work(new_block)
-        # if not proof:
-        #     return False
-        # new_block.hash = proof
-        #self.
-        # _block(new_block, proof)
-        #self.unconfirmed_transactions = []
 
     def check_chain_validity(self):
         result = True
