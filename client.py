@@ -47,7 +47,7 @@ if __name__ == '__main__':
                                 print("TXID: ", tx.get("transaction_id"))
                                 print("From :", tx.get("sender_address"))
                                 print("To :", tx.get("receiver_address"))
-                                print("Ammount :", tx.get("ammount"))
+                                print("amount :", tx.get("amount"))
                 if command == "balance":
                         url = myAddress + "wallet_balance"
                         response = requests.get(url)
@@ -66,7 +66,7 @@ if __name__ == '__main__':
                                 continue
                         url = myAddress + "create_new_transaction"
                         headers = {'Content-Type': "application/json"}
-                        data = {"sender_ip": myAddress, "receiver_ip": (id_ip.get(command[1])), "ammount": (int(command[2]))}
+                        data = {"sender_ip": myAddress, "receiver_ip": (id_ip.get(command[1])), "amount": (int(command[2]))}
                         response = requests.post(url, data=json.dumps(data), headers = headers)
                         print(response.text)
                 

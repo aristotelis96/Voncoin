@@ -14,13 +14,13 @@ import json
 import base64
 
 def verify_signature(tx):
-        toTest = Transaction(tx.get("sender_address"), tx.get("receiver_address"), tx.get("ammount"), tx.get("txInput"))
+        toTest = Transaction(tx.get("sender_address"), tx.get("receiver_address"), tx.get("amount"), tx.get("txInput"))
         pubKey = RSA.importKey(tx.get("sender_address"))
         verifier = SIGN.new(pubKey)
         return (verifier.verify(toTest.transaction_id_Obj, tx.get("signature").encode('cp437')))
 
 def parse_transaction(tx):
-        newTx = Transaction(tx["sender_address"], tx["receiver_address"], tx["ammount"], tx["txInput"])
+        newTx = Transaction(tx["sender_address"], tx["receiver_address"], tx["amount"], tx["txInput"])
         newTx.transaction_id = tx["transaction_id"]
         newTx.transaction_outputs = tx["txOutput"]
         newTx.signature = tx["signature"].encode('cp437')
@@ -34,7 +34,7 @@ class Transaction:
                 #self.receiver_address: Wallet's public key TO which the transfer is made
                 self.receiver_address = receiver_address
                 #self.amount: Amount to be transfered
-                self.ammount = value
+                self.amount = value
                 #self.transaction_inputs: List of Transaction Input 
                 self.transaction_inputs = inputs
                 #self.transaction_id: Transaction's hash
@@ -49,7 +49,7 @@ class Transaction:
                 #self.signature = signer.sign(self.transaction_id)
 
         def to_dict(self):
-                tmp = {"sender_address": self.sender_address, "receiver_address": self.receiver_address, "ammount": self.ammount, "transaction_id": self.transaction_id, "txInput": self.transaction_inputs, "txOutput": self.transaction_outputs, "signature": self.signature.decode('cp437')}
+                tmp = {"sender_address": self.sender_address, "receiver_address": self.receiver_address, "amount": self.amount, "transaction_id": self.transaction_id, "txInput": self.transaction_inputs, "txOutput": self.transaction_outputs, "signature": self.signature.decode('cp437')}
                 return tmp
 
         def sign_transaction(self, key):

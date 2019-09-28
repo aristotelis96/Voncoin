@@ -110,8 +110,8 @@ def test():
 @app.route('/wallet_balance', methods=['GET'])
 def wallet_balance():
         global node
-        ammount = node.wallet_balance
-        return json.dumps({"wallet_balance": ammount}), 200
+        amount = node.wallet_balance
+        return json.dumps({"wallet_balance": amount}), 200
 
 #endpoint to return current chain without consensus
 @app.route('/currentchain', methods=['GET'])
@@ -126,22 +126,22 @@ def create_new_transaction():
     try:
         txLock.acquire()
         tx_data = request.get_json()
-        required_fields = ["sender_ip", "receiver_ip", "ammount"]
+        required_fields = ["sender_ip", "receiver_ip", "amount"]
         for field in required_fields:              
                 if not tx_data.get(field):
                         return "Invalid transaction data", 403
         global node
-        node.create_transaction(tx_data["sender_ip"], tx_data["receiver_ip"], tx_data["ammount"])
+        node.create_transaction(tx_data["sender_ip"], tx_data["receiver_ip"], tx_data["amount"])
         # if(tx_data["sender_ip"] != myWallet.myAddress):
         #         return "Wrong sender IP", 405
-        # #get inputs from UTXO pool until ammount is reached
+        # #get inputs from UTXO pool until amount is reached
         # NBCtotal = 0
         # UTXOs = wallets.get(tx_data.get("sender_ip"))
         # NewUTXOs = UTXOs
         # inputs = []
-        # while NBCtotal < tx_data.get("ammount"):
+        # while NBCtotal < tx_data.get("amount"):
         #         for txInput in UTXOs:
-        #                 NBCtotal += txInput.get("ammount")
+        #                 NBCtotal += txInput.get("amount")
         #                 inputs.append(txInput)
         #                 NewUTXOs.remove(txInput)
         # #find key of recipient
@@ -151,20 +151,20 @@ def create_new_transaction():
         #                 recipient_key = key
         #                 break
         # newTx = transaction.Transaction(myWallet.publickey.decode(
-        #     'utf-8'), recipient_key, tx_data.get("ammount"), inputs)
+        #     'utf-8'), recipient_key, tx_data.get("amount"), inputs)
         # newTx.sign_transaction(myWallet.privatekey)
         # #broadcast TX
         # for peer in [p for (_, p) in peers.items() if p != myWallet.myAddress]:
         #     thread = broadcast_transaction(newTx, peer)
         #     thread.start()
         # output = []
-        # output.append({"id": 0, "transaction_id": newTx.transaction_id, "ammount": tx_data.get(
-        #     "ammount"), "recipient_address": recipient_key})
+        # output.append({"id": 0, "transaction_id": newTx.transaction_id, "amount": tx_data.get(
+        #     "amount"), "recipient_address": recipient_key})
         # wallets[tx_data.get("receiver_ip")].append(output[0])
-        # change = NBCtotal - tx_data.get("ammount")
+        # change = NBCtotal - tx_data.get("amount")
         # if(change > 0):
-        #         output.append({"id": 1, "transaction_id": newTx.transaction_id, "ammount": NBCtotal -
-        #                        tx_data.get("ammount"), "recipient_address": myWallet.publickey.decode('utf-8')})
+        #         output.append({"id": 1, "transaction_id": newTx.transaction_id, "amount": NBCtotal -
+        #                        tx_data.get("amount"), "recipient_address": myWallet.publickey.decode('utf-8')})
         #         wallets[tx_data.get("sender_ip")].append(output[1])
         # newTx.transaction_outputs = output
         # while not blockchain.add_new_transaction(newTx.to_dict()):
@@ -180,7 +180,7 @@ def new_transaction():
         txLock.acquire()
         tx_data = request.get_json()
         required_fields = ["sender_address", "receiver_address",
-                           "ammount", "transaction_id", "txInput", "signature"]
+                           "amount", "transaction_id", "txInput", "signature"]
         for field in required_fields:
                 if not tx_data.get(field):
                         print(field)
@@ -192,7 +192,7 @@ def new_transaction():
         return "Success", 201
         # tx_data = request.get_json()
         # required_fields = ["sender_address", "receiver_address",
-        #                    "ammount", "transaction_id", "txInput", "signature"]
+        #                    "amount", "transaction_id", "txInput", "signature"]
         # for field in required_fields:
         #         if not tx_data.get(field):
         #                 print(field)
@@ -212,7 +212,7 @@ def new_transaction():
         #         if not any(inp["transaction_id"] == txInput["transaction_id"] for inp in UTXOs):
         #                 print("Invalid inputs in /new_transaction")
         #                 return "Invalid transaction, invalid input", 403
-        # #remove these inputs and find total NBC ammount used
+        # #remove these inputs and find total NBC amount used
         # NBCused = 0
         # for txInput in inputs:
         #         tbremoved = (
@@ -221,23 +221,23 @@ def new_transaction():
         #         if not tbremoved["recipient_address"] == tx_data["sender_address"]:
         #                 print("Transaction is using wrong inputs, discarding")
         #                 return "Invalid Transaction, wrong inputs", 405
-        #         NBCused += tbremoved.get("ammount")
+        #         NBCused += tbremoved.get("amount")
         #         wallets.get(ip).remove(tbremoved)
         # output = []
-        # output.append({"id": 0, "transaction_id": tx_data.get("transaction_id"), "ammount": tx_data.get(
-        #     "ammount"), "recipient_address": tx_data.get("receiver_address")})
+        # output.append({"id": 0, "transaction_id": tx_data.get("transaction_id"), "amount": tx_data.get(
+        #     "amount"), "recipient_address": tx_data.get("receiver_address")})
         # recv_ip = peers.get(tx_data.get("receiver_address"))
         # if not wallets.get(recv_ip):
         #         wallets[recv_ip] = []
         # wallets[recv_ip].append(output[0])
-        # change = NBCused - tx_data.get("ammount")
+        # change = NBCused - tx_data.get("amount")
         # if(change > 0):
-        #         output.append({"id": 1, "transaction_id": tx_data.get("transaction_id"), "ammount": NBCused -
-        #                        tx_data.get("ammount"), "recipient_address": tx_data.get("sender_address")})
+        #         output.append({"id": 1, "transaction_id": tx_data.get("transaction_id"), "amount": NBCused -
+        #                        tx_data.get("amount"), "recipient_address": tx_data.get("sender_address")})
         #         wallets[ip].append(output[1])
         # tx_data["txOutput"] = output
-        # print("/new_transaction adding ammount: ",
-        #       tx_data.get('ammount'), " from ", ip, " to: ", recv_ip)
+        # print("/new_transaction adding amount: ",
+        #       tx_data.get('amount'), " from ", ip, " to: ", recv_ip)
         # while not blockchain.add_new_transaction(tx_data):
         #         mine_unconfirmed_transactions()
 
@@ -314,9 +314,9 @@ def register_new_peers():
         # #remove from utxo, while registering only 1 UTXO in list
         # UTXO = wallets.pop(myWallet.myAddress)[0]
         # output0 = {"id": 0, "transaction_id": newNodeTx.transaction_id,
-        #            "ammount": newNodeTx.ammount, "recipient_address": key}
-        # output1 = {"id": 1, "transaction_id": newNodeTx.transaction_id, "ammount": UTXO.get(
-        #     "ammount") - newNodeTx.ammount, "recipient_address": myWallet.publickey.decode('utf-8')}
+        #            "amount": newNodeTx.amount, "recipient_address": key}
+        # output1 = {"id": 1, "transaction_id": newNodeTx.transaction_id, "amount": UTXO.get(
+        #     "amount") - newNodeTx.amount, "recipient_address": myWallet.publickey.decode('utf-8')}
         # output = [output0, output1]
         # newNodeTx.transaction_outputs = output
         # #add to blockchain
@@ -451,13 +451,13 @@ if __name__ == '__main__':
 #     id_ip.update({"id0": myAddress})
 #     idCounter += 1
 #     #create First Transaction, 500*N NBC to my self # Everyone assumes self as bootstrap until registered
-#     firstInput = {"previousOutputId": 0, "ammount": 500}
+#     firstInput = {"previousOutputId": 0, "amount": 500}
 #     initTransaction = transaction.Transaction(
 #         "0", myWallet.publickey.decode('utf-8'), 500, firstInput)
 #     initTransaction.sign_transaction(myWallet.privatekey)
 #     #we dont validate this transaction, just create UTXOs
 #     output = {"id": 0, "transaction_id": initTransaction.transaction_id,
-#               "recipient_address": myWallet.publickey.decode('utf-8'), "ammount": initTransaction.ammount}
+#               "recipient_address": myWallet.publickey.decode('utf-8'), "amount": initTransaction.amount}
 #     initTransaction.transaction_outputs.append(output)
 #     # save to wallets
 #     wallets.update({myAddress: [output]})

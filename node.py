@@ -24,8 +24,8 @@ class node:
 
     @property
     def wallet_balance(self):
-        ammount = sum(UTXO.get("ammount") for UTXO in self.wallets[self.wallet.address])
-        return ammount
+        amount = sum(UTXO.get("amount") for UTXO in self.wallets[self.wallet.address])
+        return amount
 
     #Bootstrap Method to register a node
     def register_node(self, node_address, node_key):    
@@ -52,9 +52,9 @@ class node:
         #remove from utxo, while registering only 1 UTXO in list
         UTXO = self.wallets.pop(self.wallet.address)[0]
         output0 = {"id": 0, "transaction_id": newNodeTx.transaction_id,
-                   "ammount": newNodeTx.ammount, "recipient_address": node_key}
-        output1 = {"id": 1, "transaction_id": newNodeTx.transaction_id, "ammount": UTXO.get(
-            "ammount") - newNodeTx.ammount, "recipient_address": self.wallet.publickey.decode('utf-8')}
+                   "amount": newNodeTx.amount, "recipient_address": node_key}
+        output1 = {"id": 1, "transaction_id": newNodeTx.transaction_id, "amount": UTXO.get(
+            "amount") - newNodeTx.amount, "recipient_address": self.wallet.publickey.decode('utf-8')}
         output = [output0, output1]
         newNodeTx.transaction_outputs = output
         self.commit_transaction(newNodeTx)
@@ -82,11 +82,11 @@ class node:
     #bottstrap node informs all other nodes and gives the request node an id and 100 NBCs
 
     # Create initial transaction (100 NBC to a peer from bootstrap)
-    def create_initial_transaction(self, bootstrap, ammount):
-        firstInput = {"previousOutputId": 0, "ammount": ammount}
-        initTransaction = transaction.Transaction("0", self.wallet.publickey.decode('utf-8'), ammount, firstInput)
+    def create_initial_transaction(self, bootstrap, amount):
+        firstInput = {"previousOutputId": 0, "amount": amount}
+        initTransaction = transaction.Transaction("0", self.wallet.publickey.decode('utf-8'), amount, firstInput)
         initTransaction.sign_transaction(self.wallet.privatekey)
-        output = {"id": 0, "transaction_id": initTransaction.transaction_id, "recipient_address": self.wallet.publickey.decode('utf-8'), "ammount": initTransaction.ammount}
+        output = {"id": 0, "transaction_id": initTransaction.transaction_id, "recipient_address": self.wallet.publickey.decode('utf-8'), "amount": initTransaction.amount}
         initTransaction.transaction_outputs.append(output)        
         self.wallets.update({self.address: [output]})
         self.chain.create_genesis_block(initTransaction)
@@ -109,7 +109,8 @@ class node:
         # thread.start()
         return
 
-    def create_transaction(self, sender, receiver, ammount):
+    def create_transaction(self, sender, receiver, amount):
+        self.commitLock.acquire()   
         if (sender != self.wallet.address):
             return "Wrong sender IP"
         UTXOs = self.wallets.get(sender)
@@ -118,14 +119,14 @@ class node:
         newUTXOs = UTXOs
         # Use UTXOs from node's wallet
         for txInput in UTXOs:
-            if total > ammount:
+            if total > amount:
                 break
-            total += txInput["ammount"]
+            total += txInput["amount"]
             inputs.append(txInput)
             newUTXOs.remove(txInput)
         #Find key from ip
         recipient_key = [key for (key, ip) in self.peers.items() if ip == receiver][0]
-        newTx = transaction.Transaction(self.wallet.publickey.decode('utf-8'), recipient_key, ammount, inputs)
+        newTx = transaction.Transaction(self.wallet.publickey.decode('utf-8'), recipient_key, amount, inputs)
         newTx.sign_transaction(self.wallet.privatekey)
         #Broadcast TX
         for peer in [p for (_,p) in self.peers.items() if p!=self.wallet.address]:
@@ -133,17 +134,20 @@ class node:
             thread.start()
             #self.send_transaction(newTx, peer)
         output = []
-        output.append({"id": 0, "transaction_id": newTx.transaction_id, "ammount": ammount, "recipient_address": recipient_key})
+        output.append({"id": 0, "transaction_id": newTx.transaction_id, "amount": amount, "recipient_address": recipient_key})
         self.wallets[receiver].append(output[0])
-        change = total - ammount
+        change = total - amount
         if change > 0:
-            output.append({"id": 1, "transaction_id": newTx.transaction_id, "ammount": total - ammount, "recipient_address": self.wallet.publickey.decode('utf-8')})
+            output.append({"id": 1, "transaction_id": newTx.transaction_id, "amount": total - amount, "recipient_address": self.wallet.publickey.decode('utf-8')})
             self.wallets[sender].append(output[1])
         newTx.transaction_outputs = output
         self.commit_transaction(newTx)
+        self.commitLock.release()
         return
     
     def receive_transaction(self, tx):
+        self.commitLock.acquire()
+
         if not transaction.verify_signature(tx):
             print("failed to verify signature in /new_transaction")
             return False
@@ -162,36 +166,35 @@ class node:
             if not tbRemoved["recipient_address"] == tx["sender_address"]:
                 print("Wrong transaction, discarding")
                 return False
-            coinsUsed += tbRemoved["ammount"]
+            coinsUsed += tbRemoved["amount"]
             newUTXOs.remove(tbRemoved)
         #Replace updated UXTOs for sender
         self.wallets[ip] = newUTXOs
         output = []
-        output.append({"id": 0, "transaction_id": tx.get("transaction_id"), "ammount": tx.get(
-            "ammount"), "recipient_address": tx.get("receiver_address")})
+        output.append({"id": 0, "transaction_id": tx.get("transaction_id"), "amount": tx.get(
+            "amount"), "recipient_address": tx.get("receiver_address")})
         recv_ip = self.peers.get(tx.get("receiver_address"))
         if not self.wallets.get(recv_ip):
                 self.wallets[recv_ip] = []
         self.wallets[recv_ip].append(output[0])
-        change = coinsUsed - tx.get("ammount")
+        change = coinsUsed - tx.get("amount")
         if(change > 0):
-                output.append({"id": 1, "transaction_id": tx.get("transaction_id"), "ammount": coinsUsed -
-                               tx.get("ammount"), "recipient_address": tx.get("sender_address")})
+                output.append({"id": 1, "transaction_id": tx.get("transaction_id"), "amount": coinsUsed -
+                               tx.get("amount"), "recipient_address": tx.get("sender_address")})
                 self.wallets[ip].append(output[1])
         tx["txOutput"] = output    
         self.commit_transaction(transaction.parse_transaction(tx))
+        self.commitLock.release()
         return True
 
     
 
     # Add a transaction to current block
     def commit_transaction(self, newTx):
-        self.commitLock.acquire()
         # First add to local-node transaction list
         while not (self.chain.add_new_transaction(newTx.to_dict())):
             print("My unconfirmed full, will mine now")
             self.mine()
-        self.commitLock.release()
         #if enough transactions mine
         #try:  
         
@@ -317,16 +320,17 @@ class node:
             for blk in [blk for blk in longest_chain.chain if blk.index>=len(self.chain.chain)]:
             #while i < len(longest_chain.chain):
                 for tx in blk.transactions:
-                    for inp in tx.inputs:
+                    for inp in tx["txInput"]:
+                        print(inp)
                         try:
                             self.wallets[tx.sender_address].remove(inp["transaction_id"])
                         except:
-                            pass
-                    for out in tx.transaction_outputs:
+                            print("COULD NOT REMOVE " + inp["amount"])
+                    for out in tx["txOutput"]:
                         try:
                             self.wallets[tx.receiver].append(out)
                         except:
-                            pass
+                            print("COULD ADD REMOVE " + out["amount"])
             # Finally replace chain
             longest_chain.unconfirmed_transactions = self.chain.unconfirmed_transactions
             self.chain = longest_chain
