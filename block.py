@@ -1,10 +1,15 @@
-
-#import blockchain
 import time
 import Crypto
 import Crypto.Random
 from Crypto.Hash import SHA
 import json
+
+
+def parse_block(index, previous_hash, transactions, timestamp, nonce=None):
+        newblk = Block(index, previous_hash, transactions)
+        newblk.timestamp = timestamp
+        newblk.nonce = nonce
+        return newblk
 
 class Block:
         def __init__(self, index, previous_hash, transactions):

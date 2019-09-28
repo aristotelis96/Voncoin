@@ -22,10 +22,12 @@ class Blockchain:
     def proof_of_work(self, block):
         block.nonce = random.getrandbits(64)
         computed_hash = block.compute_hash()
-        while not computed_hash.startswith('0' * self.difficulty):# and self.mining:
+        while not computed_hash.startswith('0' * self.difficulty):
             block.nonce += 1
             computed_hash = block.compute_hash()
             if not self.mining:
+                print("I failed to mine a block")
+
                 return False
         print("I successfully mined a block")
         return computed_hash
@@ -49,8 +51,6 @@ class Blockchain:
         return True
 
     def add_block(self, block, proof):
-        # STOP mining first        
-        self.mining = False
         previous_hash = self.last_block.hash
         if previous_hash != block.previous_hash:
             return False
@@ -58,37 +58,31 @@ class Blockchain:
             print(proof)
             print("ER2")
             return False
-        block.hash = proof
+        block.hash = proof  
         self.lock.acquire()
+        # STOP mining
+        self.mining = False
         self.chain.append(block)
         # Remove new Block transactions from unconfirmed transactions list
-        self.unconfirmed_transactions = [tx for tx in self.unconfirmed_transactions if tx not in block.transactions]
-        # for tx in block.transactions:
-        #    for unconfirmed in self.unconfirmed_transactions:        
-        #        if tx["transaction_id"] == unconfirmed["transaction_id"]: self.unconfirmed_transactions.remove(unconfirmed)
+        self.unconfirmed_transactions = [tx for tx in self.unconfirmed_transactions if tx not in block.transactions] 
         self.lock.release()
         return True
 
-    def mine(self, transactions):
+    def create_block(self,transactions = None):
         last_block = self.last_block
+        if not transactions:
+            transactions = self.unconfirmed_transactions
         newBlock = block.Block(self.last_block.index + 1, last_block.hash, transactions)
+        return newBlock
+
+    def mine(self, newBlock = None):
+        if not newBlock:
+            newBlock = self.create_block()
         self.mining = True
         proof = self.proof_of_work(newBlock)
         if not proof:
-            return False
-        newBlock.hash = proof
-        return newBlock
-        # if len(self.unconfirmed_transactions) < self.capacity:
-        #     return False
-        # last_block = self.last_block
-        # new_block = block.Block(index = last_block.index + 1, previous_hash = last_block.hash, transactions = self.unconfirmed_transactions)
-        # self.mining = True
-        # proof = self.proof_of_work(new_block)
-        # if not proof:
-        #     return False
-        # new_block.hash = proof
-        #self.add_block(new_block, proof)
-        #self.unconfirmed_transactions = []
+            return newBlock, False
+        return newBlock, proof
 
     def check_chain_validity(self):
         result = True
