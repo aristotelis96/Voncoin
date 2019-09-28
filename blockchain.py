@@ -58,13 +58,13 @@ class Blockchain:
             print(proof)
             print("ER2")
             return False
-        block.hash = proof
-        # STOP mining        
-        self.mining = False
+        block.hash = proof  
         self.lock.acquire()
+        # STOP mining
+        self.mining = False
         self.chain.append(block)
-        # Remove new Block transactions from unconfirmed transactions list      
-        self.unconfirmed_transactions = [tx for tx in self.unconfirmed_transactions if tx not in block.transactions]
+        # Remove new Block transactions from unconfirmed transactions list
+        self.unconfirmed_transactions = [tx for tx in self.unconfirmed_transactions if tx not in block.transactions]        
         # for tx in block.transactions:
         #    for unconfirmed in self.unconfirmed_transactions:        
         #        if tx["transaction_id"] == unconfirmed["transaction_id"]: self.unconfirmed_transactions.remove(unconfirmed)

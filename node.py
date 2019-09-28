@@ -189,6 +189,7 @@ class node:
         self.commitLock.acquire()
         # First add to local-node transaction list
         while not (self.chain.add_new_transaction(newTx.to_dict())):
+            print("My unconfirmed full, will mine now")
             self.mine()
         self.commitLock.release()
         #if enough transactions mine
@@ -203,6 +204,8 @@ class node:
     def mine(self, newBlock = None):
         try:
             self.lock.acquire()
+            if (self.chain.capacity > len(self.chain.unconfirmed_transactions)):
+                return
             # If block is provided no need to broadcast or create it from unconfirmed transactions
             if not newBlock:
                 newBlock = self.chain.create_block()
@@ -220,6 +223,7 @@ class node:
             newBlock, proof = self.chain.mine()   
             # Exit if did not finish
             if not proof:
+                print("Did not finish Mining for me")
                 return
 
             self.chain.add_block(newBlock, proof)
@@ -248,7 +252,7 @@ class node:
             newBlock, proof = self.chain.mine(newBlock)   
             # Exit if did not finish
             if not proof:
-                print("Did not finish Mining")
+                print("Did not finish Mining for others")
                 return
 
             self.chain.add_block(newBlock, proof)
@@ -280,8 +284,9 @@ class node:
         # If added correctly fix wallets
         for tx in transactions:
             for (_, UTXOs) in self.wallets.items():
-                if tx["transaction_id"] in UTXOs:
-                    UTXOs.remove(tx["transaction_id"])                
+                UTXOs = [trans for trans in UTXOs if trans is not tx]
+                # if tx["transaction_id"] in UTXOs:
+                #     UTXOs.remove(tx["transaction_id"])                
         print("ADDED : " + str(index))
         return
 
@@ -309,8 +314,7 @@ class node:
                 longest_chain = chain
         if longest_chain:
             # Need to fix Wallets (UTXOs) for each new block 
-            i = len(self.chain.chain) + 1
-            for blk in [blk for blk in longest_chain.chain if blk.index>len(self.chain.chain)]:
+            for blk in [blk for blk in longest_chain.chain if blk.index>=len(self.chain.chain)]:
             #while i < len(longest_chain.chain):
                 for tx in blk.transactions:
                     for inp in tx.inputs:
@@ -323,7 +327,6 @@ class node:
                             self.wallets[tx.receiver].append(out)
                         except:
                             pass
-                i += 1
             # Finally replace chain
             longest_chain.unconfirmed_transactions = self.chain.unconfirmed_transactions
             self.chain = longest_chain
