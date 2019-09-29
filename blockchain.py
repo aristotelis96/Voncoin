@@ -26,6 +26,7 @@ class Blockchain:
             block.nonce += 1
             computed_hash = block.compute_hash()
             if not self.mining:
+                print("I failed to mine a block")
                 return False
         print("I successfully mined a block")
         return computed_hash
@@ -71,7 +72,18 @@ class Blockchain:
 
     def mine(self, transactions):
         last_block = self.last_block
+        if not transactions:
+            if self.capacity > len(self.unconfirmed_transactions):
+                return False
+            transactions = self.unconfirmed_transactions
         newBlock = block.Block(self.last_block.index + 1, last_block.hash, transactions)
+        return newBlock
+
+    def mine(self, newBlock = None):
+        if not newBlock:
+            newBlock = self.create_block()
+            if not newBlock:
+                return
         self.mining = True
         proof = self.proof_of_work(newBlock)
         if not proof:
