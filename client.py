@@ -6,11 +6,11 @@ from tools import get_ip
 
 id_ip = {}
 
-def register():
+def register(ip):
         url = myAddress + "register_with"
         headers = {'Content-Type': "application/json"}
-        # This is the bootstrap NODE. (Maybe TODO: change to argument)
-        data = {"bootstrap_address":"10.0.2.4:5000"}    
+        # This is the bootstrap NODE.
+        data = {"bootstrap_address":ip}    
         requests.post(url, data=json.dumps(data), headers=headers)
 
 def update_ids():
@@ -25,13 +25,17 @@ if __name__ == '__main__':
         import socket
         parser = ArgumentParser()
         parser.add_argument('-b', '--bootstrap', default=0, type=int, help="if this is bootstrap set b=1")
+        parser.add_argument('-p', '--port', default=5000, type=int, help="port your api listens too")
+        parser.add_argument('-ip', '--ip', default="10.0.2.4:5000", type=str, help="bootstrap ip")
         args = parser.parse_args()
         bts = args.bootstrap
+        port = args.port
+        ip = args.ip
 
         global myAddress
-        myAddress = "http://"  + get_ip() + ":5000/"
+        myAddress = "http://"  + get_ip() + ":" + str(port) + "/"
         if not bts:
-                register() #register
+                register(ip) #register
         while(1):
                 print("------ Give a command -----")
                 command = input()
@@ -39,7 +43,7 @@ if __name__ == '__main__':
                 update_ids()
                 if command == "bye":
                         print("Bye bye")
-                        break;
+                        break
                 if command == "view":
                         url = myAddress + "view_transactions"
                         transactions = requests.get(url).json().get("transactions")

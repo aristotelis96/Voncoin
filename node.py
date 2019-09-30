@@ -236,7 +236,8 @@ class node:
                 if not (transaction.verify_signature(tx)):
                     print('invalid')
                     return False        
-            
+            if newBlock.index < len(self.chain.chain):
+                return
             newBlock, proof = self.chain.mine(newBlock)   
             # Exit if did not finish
             if not proof:

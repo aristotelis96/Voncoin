@@ -42,20 +42,14 @@ class Transaction:
                 self.transaction_id_Obj = SHA.new(serialized)
                 self.transaction_id = self.transaction_id_Obj.hexdigest()
                 #self.transaction_outputs: List of Transaction Output
-                self.transaction_outputs = []
-                #self Signature
-                #privKey = RSA.importKey(sender_private_key)
-                #signer = SIGN.new(privKey)
-                #self.signature = signer.sign(self.transaction_id)
+                self.transaction_outputs = []                
 
         def to_dict(self):
                 tmp = {"sender_address": self.sender_address, "receiver_address": self.receiver_address, "amount": self.amount, "transaction_id": self.transaction_id, "txInput": self.transaction_inputs, "txOutput": self.transaction_outputs, "signature": self.signature.decode('cp437')}
                 return tmp
 
-        def sign_transaction(self, key):
-                """
-                Sign transaction with private key
-                """
+        def sign_transaction(self, key):                
+                #Sign transaction with private key                
                 privKey = RSA.importKey(key)
                 signer = SIGN.new(privKey)
                 self.signature = signer.sign(self.transaction_id_Obj)

@@ -34,5 +34,4 @@ class wallet:
         @property
         def myAddress(self):
                 return self.address
-        #def balance():
 

@@ -24,7 +24,7 @@ glock = _thread.allocate_lock()
 #transaction lock
 txLock = _thread.allocate_lock()
 
-
+# Testing endpoint
 @app.route('/test', methods=['GET'])
 def test():
         global node
@@ -78,6 +78,7 @@ def new_transaction():
         txLock.release()
         return "Success", 201
 
+# Return blockchain after consensus
 @app.route('/chain', methods=['GET'])
 def get_chain():        
         global node                
@@ -85,7 +86,7 @@ def get_chain():
         chain_data = [blk.__dict__ for blk in node.chain.chain]        
         return json.dumps({"length": len(chain_data), "chain": chain_data, "wallets": node.wallets})
 
-
+# Get unmined transcation
 @app.route('/pending_tx')
 def pending_tx():
         global node
@@ -101,7 +102,6 @@ def register_new_peers():
         return get_chain()
 
 #endPoint to register this node with someone else (e.x. bootstrap)
-# Make post request with data = { node_address: #address_to_connect(bootstrap) }
 @app.route('/register_with', methods=['POST'])
 def register_with_existing_node():
         bootstrap_address = request.get_json()["bootstrap_address"]
@@ -128,8 +128,7 @@ def get_id_ip():
 
 #Route to add a block someone else mined
 @app.route('/add_block', methods=['POST'])
-def validate_and_add_block():
-    # glock.acquire()
+def validate_and_add_block():    
     global node
     data = request.get_json()
     block_data = data["block"]
