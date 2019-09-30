@@ -39,7 +39,7 @@ class node:
             url = "{}add_peers".format(peer)
             headers = {'Content-Type': "application/json"}
             requests.post(url, data=json.dumps({"peers": (self.peers), "id_ip": self.id_ip}), headers=headers)
-        # Create transaction for new node. 100 VBC from bootstrap
+        # Create transaction for new node. 100 VCs from bootstrap
         inputs = [self.wallets.get(self.wallet.address)[0]]
         newNodeTx = transaction.Transaction(self.wallet.publickey.decode('utf-8'), node_key, 100, inputs)
         newNodeTx.sign_transaction(self.wallet.privatekey)
@@ -78,9 +78,9 @@ class node:
         else:
                 return "Registration failed", 500
     #add this node to the ring, only the bootstrap node can add a node to the ring after checking his wallet and ip:port address
-    #bottstrap node informs all other nodes and gives the request node an id and 100 VBCs
+    #bottstrap node informs all other nodes and gives the request node an id and 100 VCss
 
-    # Create initial transaction (100 VBC to a peer from bootstrap)
+    # Create initial transaction (100 VCs to a peer from bootstrap)
     def create_initial_transaction(self, bootstrap, amount):
         firstInput = {"previousOutputId": 0, "amount": amount}
         initTransaction = transaction.Transaction("0", self.wallet.publickey.decode('utf-8'), amount, firstInput)
