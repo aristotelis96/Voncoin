@@ -100,90 +100,94 @@ class node:
         return
 
     def create_transaction(self, sender, receiver, amount):
-        self.commitLock.acquire()   
-        if (sender != self.wallet.address):
-            return "Wrong sender IP"
-        UTXOs = self.wallets.get(sender)        
-        total = 0
-        inputs = []
-        newUTXOs = UTXOs
-        # Use UTXOs from node's wallet
-        for txInput in [x for x in UTXOs]:
-            if (total > amount):
-                break
-            total += txInput["amount"]
-            inputs.append(txInput)
-            newUTXOs.remove(txInput)            
-        if total < amount:
-            raise("TOTAL UTXOs DID NOT REACH AMOUNT NEEDED")
-        #Find key from ip
-        recipient_key = [key for (key, ip) in self.peers.items() if ip == receiver][0]
-        newTx = transaction.Transaction(self.wallet.publickey.decode('utf-8'), recipient_key, amount, inputs)
-        newTx.sign_transaction(self.wallet.privatekey)
-        #Broadcast TX
-        for peer in [p for (_,p) in self.peers.items() if p!=self.wallet.address]:
-            thread = threading.Thread(target=self.send_transaction, args=(newTx, peer))
-            thread.start()            
-        output = []
-        output.append({"id": 0, "transaction_id": newTx.transaction_id, "amount": amount, "recipient_address": recipient_key})
-        self.wallets[receiver].append(output[0])
-        change = total - amount
-        if change > 0:
-            output.append({"id": 1, "transaction_id": newTx.transaction_id, "amount": total - amount, "recipient_address": self.wallet.publickey.decode('utf-8')})
-            self.wallets[sender].append(output[1])
-        newTx.transaction_outputs = output
-        self.commit_transaction(newTx)
-        self.commitLock.release()
-        return
+        try:
+            self.commitLock.acquire()   
+            if (sender != self.wallet.address):
+                return "Wrong sender IP"
+            UTXOs = self.wallets.get(sender)        
+            total = 0
+            inputs = []
+            newUTXOs = UTXOs
+            # Use UTXOs from node's wallet
+            for txInput in [x for x in UTXOs]:
+                if (total > amount):
+                    break
+                total += txInput["amount"]
+                inputs.append(txInput)
+                newUTXOs.remove(txInput)            
+            if total < amount:
+                raise("TOTAL UTXOs DID NOT REACH AMOUNT NEEDED")
+            #Find key from ip
+            recipient_key = [key for (key, ip) in self.peers.items() if ip == receiver][0]
+            newTx = transaction.Transaction(self.wallet.publickey.decode('utf-8'), recipient_key, amount, inputs)
+            newTx.sign_transaction(self.wallet.privatekey)
+            #Broadcast TX
+            for peer in [p for (_,p) in self.peers.items() if p!=self.wallet.address]:
+                thread = threading.Thread(target=self.send_transaction, args=(newTx, peer))
+                thread.start()            
+            output = []
+            output.append({"id": 0, "transaction_id": newTx.transaction_id, "amount": amount, "recipient_address": recipient_key})
+            self.wallets[receiver].append(output[0])
+            change = total - amount
+            if change > 0:
+                output.append({"id": 1, "transaction_id": newTx.transaction_id, "amount": total - amount, "recipient_address": self.wallet.publickey.decode('utf-8')})
+                self.wallets[sender].append(output[1])
+            newTx.transaction_outputs = output
+            self.commit_transaction(newTx)
+            return
+        finally:
+            self.commitLock.release()
     
     def receive_transaction(self, tx):
-        self.commitLock.acquire()
+        try:
+            self.commitLock.acquire()
 
-        if not transaction.verify_signature(tx):
-            print("failed to verify signature in /new_transaction")
-            return False
-        #Validate inputs are indeed UTXOs
-        ip = self.peers.get(tx["sender_address"])
-        UTXOs = self.wallets[ip]        
-        for txInput in tx["txInput"]:
-            if not any(inp["transaction_id"] == txInput["transaction_id"] for inp in UTXOs):
-                print("Invalid inputs")
+            if not transaction.verify_signature(tx):
+                print("failed to verify signature in /new_transaction")
                 return False
-        # Remove inputs from wallet and find total coins used
-        coinsUsed = 0
-        newUTXOs = UTXOs
-        for txInput in tx["txInput"]:
-            tbRemoved = (next(inp for inp in UTXOs if inp["transaction_id"] == txInput["transaction_id"]))
-            if not tbRemoved["recipient_address"] == tx["sender_address"]:
-                print("Wrong transaction, discarding")
-                return False
-            coinsUsed += tbRemoved["amount"]
-            newUTXOs.remove(tbRemoved)
-        #Replace updated UXTOs for sender
-        self.wallets[ip] = newUTXOs
-        output = []
-        output.append({"id": 0, "transaction_id": tx.get("transaction_id"), "amount": tx.get(
-            "amount"), "recipient_address": tx.get("receiver_address")})
-        recv_ip = self.peers.get(tx.get("receiver_address"))
-        if not self.wallets.get(recv_ip):
-                self.wallets[recv_ip] = []
-        self.wallets[recv_ip].append(output[0])
-        change = coinsUsed - tx.get("amount")
-        if(change > 0):
-                output.append({"id": 1, "transaction_id": tx.get("transaction_id"), "amount": coinsUsed -
-                               tx.get("amount"), "recipient_address": tx.get("sender_address")})
-                self.wallets[ip].append(output[1])
-        tx["txOutput"] = output    
-        self.commit_transaction(transaction.parse_transaction(tx))
-        self.commitLock.release()
-        return True
+            #Validate inputs are indeed UTXOs
+            ip = self.peers.get(tx["sender_address"])
+            UTXOs = self.wallets[ip]        
+            for txInput in tx["txInput"]:
+                if not any(inp["transaction_id"] == txInput["transaction_id"] for inp in UTXOs):
+                    print("Invalid inputs")
+                    return False
+            # Remove inputs from wallet and find total coins used
+            coinsUsed = 0
+            newUTXOs = UTXOs
+            for txInput in tx["txInput"]:
+                tbRemoved = (next(inp for inp in UTXOs if inp["transaction_id"] == txInput["transaction_id"]))
+                if not tbRemoved["recipient_address"] == tx["sender_address"]:
+                    print("Wrong transaction, discarding")
+                    return False
+                coinsUsed += tbRemoved["amount"]
+                newUTXOs.remove(tbRemoved)
+            #Replace updated UXTOs for sender
+            self.wallets[ip] = newUTXOs
+            output = []
+            output.append({"id": 0, "transaction_id": tx.get("transaction_id"), "amount": tx.get(
+                "amount"), "recipient_address": tx.get("receiver_address")})
+            recv_ip = self.peers.get(tx.get("receiver_address"))
+            if not self.wallets.get(recv_ip):
+                    self.wallets[recv_ip] = []
+            self.wallets[recv_ip].append(output[0])
+            change = coinsUsed - tx.get("amount")
+            if(change > 0):
+                    output.append({"id": 1, "transaction_id": tx.get("transaction_id"), "amount": coinsUsed -
+                                tx.get("amount"), "recipient_address": tx.get("sender_address")})
+                    self.wallets[ip].append(output[1])
+            tx["txOutput"] = output    
+            self.commit_transaction(transaction.parse_transaction(tx))
+            return True
+        finally:
+            self.commitLock.release()
 
     
 
     # Add a transaction to current block
     def commit_transaction(self, newTx):
         # First add to local-node transaction list
-        while not (self.chain.add_new_transaction(newTx.to_dict())):
+        if not (self.chain.add_new_transaction(newTx.to_dict())):
             print("My unconfirmed full, will mine now")
             self.mine()
         return  

@@ -42,10 +42,10 @@ class Blockchain:
 
     def add_new_transaction(self, transaction):
         self.lock.acquire()
+        self.unconfirmed_transactions.append(transaction)
         if(len(self.unconfirmed_transactions)==self.capacity):
             self.lock.release()
             return False
-        self.unconfirmed_transactions.append(transaction)
         self.lock.release()
         return True
 
@@ -72,7 +72,7 @@ class Blockchain:
         if not transactions:
             if self.capacity > len(self.unconfirmed_transactions):
                 return False
-            transactions = self.unconfirmed_transactions
+            transactions = self.unconfirmed_transactions[:self.capacity]
         newBlock = block.Block(self.last_block.index + 1, last_block.hash, transactions)
         return newBlock
 
