@@ -170,11 +170,14 @@ if __name__ == '__main__':
     # Get Port to listen to
     parser.add_argument('-p', '--port', default=5000,
                         type=int, help='port to listen on')
+    parser.add_argument('-n', '--nodes', default=5,
+                        type=int, help='number of nodes')
     args = parser.parse_args()
     port = args.port
+    nodes = args.nodes
     #Get own address
     myAddress = "http://" + tools.get_ip() + ":" + str(port) + "/"
     global node
     node = NodeModule.node(myAddress)            
-    node.create_initial_transaction(node.address, 500)    
+    node.create_initial_transaction(node.address, 100*nodes)    
     app.run(host='0.0.0.0', port=port)

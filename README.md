@@ -12,8 +12,10 @@ pip3 install flask flask-cors requests pycrypto
 ### Installation
 First you have to run the backend server on each node (or on the same node using different ports)
 ```
-python3 rest.py -p=PORT #default is 5000
+python3 rest.py -p=PORT -n=NODES
 ```
+* PORT is port number for api to listen to (default 5000)
+* NODES is the number of nodes that will be used in the network (default 5)
 After all backend services are up and running you will need to start a simple cli program that will be used to control the backend RESTful API
 ```
 python3 client.py -p=PORT -ip=IP -b=1
