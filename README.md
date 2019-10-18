@@ -25,10 +25,8 @@ python3 client.py -p=PORT -ip=IP -b=1
 * IP is the IP of the bootstrap node (default 10.0.2.4:5000)
 * -b=1 is a flag indicating a node as bootstrap (default value 0). NOTE: Only **one** node can be set as bootstrap in a network at a time
 
-Bootstrap node starts with 500 coins (genesis block) and each time a new node enters the network it recieves 100 coins. 
+Bootstrap node starts with n\*100 coins (n=number of Nodes) and each time a new node enters the network it recieves 100 coins. 
 Also each node is assinged an id (bootstrap has id=0, first node to connect has id=1 etc.)
-
-*This is hardcoded for now meaning maximum number of nodes can be 5. To be updated*
 
 ## Testing the blockchain
 ##### Important note: Before making any transactions all nodes must be connected to the network
